@@ -1,7 +1,11 @@
+# Build context is the mcp-servers/ folder so the shared mcp_common package is available:
+#   docker build -f ecommerce-mcp-server/Dockerfile mcp-servers
 FROM python:3.12-slim
 WORKDIR /srv
-COPY requirements.txt .
+COPY ecommerce-mcp-server/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app ./app
+COPY mcp_common ./mcp_common
+COPY ecommerce-mcp-server/app ./app
+ENV PYTHONPATH=/srv PYTHONUNBUFFERED=1
 EXPOSE 8090
 CMD ["python", "-m", "app.main"]

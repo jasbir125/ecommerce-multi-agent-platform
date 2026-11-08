@@ -1,14 +1,42 @@
-"""ecommerce-mcp-server: FastMCP server exposing tools/resources/prompts. Real tools arrive in Phase 3."""
+"""ecommerce-mcp-server: controlled MCP access to the Spring Boot ecommerce services."""
+import logging
+
 from fastmcp import FastMCP
+from starlette.middleware import Middleware
+from starlette.responses import JSONResponse
 
-mcp = FastMCP("ecommerce-mcp-server")
+from app.config import Settings, get_settings
+from app.deps import Deps
+from app.prompts import ecommerce_prompts
+from app.resources import ecommerce_resources
+from app.security import TokenAuthMiddleware
+from app.tools import read_tools, write_tools
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+
+INSTRUCTIONS = ("Tools for investigating and recovering delayed ecommerce orders. Identity comes from the "
+                "authenticated session, not from arguments. Write tools only request actions; the domain "
+                "services decide. Never claim an action succeeded without a successful result.")
 
 
-@mcp.tool()
-def ping() -> str:
-    """Placeholder tool so the server starts and can be listed by MCP clients."""
-    return "pong"
+def create_server(settings: Settings | None = None, deps: Deps | None = None) -> FastMCP:
+    settings = settings or get_settings()
+    deps = deps or Deps.build(settings)
+    mcp = FastMCP("ecommerce-mcp-server", instructions=INSTRUCTIONS)
+    read_tools.register(mcp, deps)
+    write_tools.register(mcp, deps)
+    ecommerce_resources.register(mcp, deps)
+    ecommerce_prompts.register(mcp, deps)
+
+    @mcp.custom_route("/health", methods=["GET"])
+    async def health(_request):
+        return JSONResponse({"status": "ok"})
+
+    return mcp
 
 
 if __name__ == "__main__":
-    mcp.run(transport="http", host="0.0.0.0", port=8090, path="/mcp")
+    s = get_settings()
+    create_server(s).run(
+        transport="http", host="0.0.0.0", port=s.ecommerce_mcp_port, path="/mcp",
+        middleware=[Middleware(TokenAuthMiddleware, token=s.mcp_service_token)])

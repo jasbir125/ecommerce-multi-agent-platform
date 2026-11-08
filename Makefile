@@ -1,5 +1,5 @@
 # Convenience targets. Run `make help` for the list.
-.PHONY: help env infra up down logs ps topics psql build-java run-agent run-mcp run-ui clean
+.PHONY: help env infra up down logs ps topics psql build-java run-agent run-mcp test-mcp run-ui clean
 
 help:        ## Show this help
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -37,8 +37,12 @@ build-java:  ## Build all Spring Boot services
 run-agent:   ## Run agent-host locally
 	cd agent-host && uvicorn app.main:app --reload --port 8092
 
-run-mcp:     ## Run the ecommerce MCP server locally
-	cd mcp-servers/ecommerce-mcp-server && python -m app.main
+run-mcp:     ## Run the ecommerce MCP server locally (needs Python 3.10+)
+	cd mcp-servers/ecommerce-mcp-server && PYTHONPATH=..:. python -m app.main
+
+test-mcp:    ## Run MCP server tests
+	cd mcp-servers/ecommerce-mcp-server && PYTHONPATH=..:. python -m pytest -q
+	cd mcp-servers/policy-mcp-server && PYTHONPATH=..:. python -m pytest -q
 
 run-ui:      ## Run Streamlit locally
 	cd streamlit-ui && streamlit run app.py

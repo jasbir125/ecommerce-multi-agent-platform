@@ -23,3 +23,6 @@
 | Prometheus / Grafana / OTLP | 9090 / 3000 / 4317 |
 
 _Detailed diagrams are added in later phases._
+
+## MCP layer (Phase 3)
+Agent host -> `ecommerce-mcp-server` (8090) / `policy-mcp-server` (8091) -> Spring services. The MCP servers authenticate the host with a bearer token, take the end customer from `X-Customer-Id`, and expose 12 + 3 tools, resources and prompts. See `mcp-servers/README.md`.

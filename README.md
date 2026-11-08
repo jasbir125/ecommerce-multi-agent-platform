@@ -4,7 +4,7 @@ An enterprise-grade Multi-Agent Ecommerce Order Recovery Platform. Demo workflow
 
 > **Core rule:** the model can suggest an action, but only authorized application code and domain services can execute it.
 
-**Status: Phase 2 complete.** Infrastructure and all nine Spring Boot services are implemented and tested end to end. The Python MCP servers, agent host and Streamlit UI are still placeholders (Phases 3-6).
+**Status: Phase 3 complete.** Infrastructure, the nine Spring Boot services and the two FastMCP servers are implemented and tested end to end. The agent host and Streamlit UI are still placeholders (Phases 4-6).
 
 ## Layout
 
@@ -55,13 +55,17 @@ mvn test
 Ports: order 8081, shipment 8082, payment 8083, inventory 8084, approval 8085, policy 8086, audit 8087, workflow 8088, notification 8089.
 
 ## Python commands
+FastMCP needs Python 3.10+ (macOS ships 3.9), so use `uv` or pyenv:
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r agent-host/requirements.txt -r mcp-servers/ecommerce-mcp-server/requirements.txt
-cd agent-host && uvicorn app.main:app --reload --port 8092
-cd mcp-servers/ecommerce-mcp-server && python -m app.main      # MCP on :8090/mcp
-cd mcp-servers/policy-mcp-server && python -m app.main         # MCP on :8091/mcp
+uv venv --python 3.12 .venv && source .venv/bin/activate
+uv pip install -r mcp-servers/ecommerce-mcp-server/requirements-dev.txt
+make test-mcp                                                     # 36 unit tests
+cd mcp-servers/ecommerce-mcp-server && PYTHONPATH=..:. python -m app.main   # MCP on :8090/mcp
+cd mcp-servers/policy-mcp-server    && PYTHONPATH=..:. python -m app.main   # MCP on :8091/mcp
+python mcp-servers/scripts/smoke_test.py                          # live end-to-end check (stack must be up)
+cd agent-host && uvicorn app.main:app --reload --port 8092        # placeholder until Phase 4
 ```
+See `mcp-servers/README.md` for the tool list and security model.
 
 ## Streamlit commands
 ```bash
@@ -116,7 +120,7 @@ Full 17-step script: `docs/demo-script.md` (filled in Phase 7). Scenarios and go
 ## Roadmap
 1. **Phase 1** — monorepo, Compose, schema, topics, README ✅
 2. **Phase 2** — Spring Boot services (Spring AI, REST, Kafka, DB, OpenTelemetry) ✅
-3. FastMCP ecommerce + policy servers
+3. **Phase 3** — FastMCP ecommerce + policy servers ✅
 4. LangGraph agent host (supervisor + specialists)
 5. Production RAG (pgvector, hybrid retrieval, reranking, caching, grounding, citations)
 6. Streamlit UI
@@ -128,6 +132,12 @@ Full 17-step script: `docs/demo-script.md` (filled in Phase 7). Scenarios and go
 - **Policy RAG**: pgvector + full-text hybrid retrieval, reciprocal-rank fusion, rerank, version/date-aware, confidence threshold with an insufficient-evidence response. `POLICY_EMBEDDING_PROVIDER=openai` uses OpenAI embeddings; `hash` is an offline fallback. Changing provider requires re-ingesting policies.
 - **Spring AI** (workflow-service): `MODEL_PROVIDER=anthropic|openai` selects the chat model; structured output (`IntentClassification`, `ResolutionDecision`), read-only tool calling and deterministic output guardrails.
 - Not yet built: model fallback across providers, Redis caching and LLM-generated grounded answers (Phase 5).
+
+## Phase 3 design notes
+- **Two FastMCP servers** call the Spring APIs only; they never touch the database. Shared code lives in `mcp-servers/mcp_common`.
+- **Identity comes from headers** (`Authorization: Bearer`, `X-Customer-Id`, `X-Workflow-Id`), never from tool arguments, so a model cannot ask for another customer's data.
+- **Write tools** are guarded (workflow id, idempotency key, amount/quantity limits, rate limit, audit) and only *request* actions; the Spring services still re-check everything.
+- Catalog and policy text is scanned for prompt-injection phrases; flagged text is withheld and audited.
 
 ## Model routing
 `MODEL_PROVIDER` selects anthropic/openai/bedrock. Per-agent models are set via `MODEL_*` variables (all Sonnet to start; see `recommended_model`).

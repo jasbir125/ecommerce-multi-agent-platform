@@ -288,7 +288,9 @@ services:
   ecommerce-mcp-server:
     <<: *app-common
     profiles: [apps]
-    build: ./mcp-servers/ecommerce-mcp-server
+    build:
+      context: ./mcp-servers
+      dockerfile: ecommerce-mcp-server/Dockerfile
     container_name: platform-ecommerce-mcp
     ports: ["8090:8090"]
     environment: *internal-env
@@ -296,7 +298,9 @@ services:
   policy-mcp-server:
     <<: *app-common
     profiles: [apps]
-    build: ./mcp-servers/policy-mcp-server
+    build:
+      context: ./mcp-servers
+      dockerfile: policy-mcp-server/Dockerfile
     container_name: platform-policy-mcp
     ports: ["8091:8091"]
     environment: *internal-env
