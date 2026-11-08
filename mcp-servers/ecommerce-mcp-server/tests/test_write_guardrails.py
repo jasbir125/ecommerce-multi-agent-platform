@@ -95,3 +95,18 @@ async def test_post_to_unreachable_service_says_not_to_claim_success(make_client
     api.post("http://localhost:8083/api/payments/refunds").mock(side_effect=httpx.ConnectError("down"))
     with pytest.raises(ToolError, match="Do not claim success"):
         await call(make_client(), "initiate_refund", REFUND_ARGS)
+
+
+async def test_notify_customer_uses_session_identity_not_arguments(make_client, api):
+    route = api.post("http://localhost:8089/api/notifications/customer").mock(
+        return_value=httpx.Response(200, json={"notificationId": 1, "status": "SENT", "message": "ok"}))
+    await call(make_client(), "notify_customer", {"workflow_id": "WF-ABC12345", "template": "MANUAL_REVIEW", "params": {"orderId": "ORD-1"}})
+    sent = json.loads(route.calls[0].request.content)
+    assert sent["customerId"] == "CUST-1001" and sent["template"] == "MANUAL_REVIEW"
+
+
+async def test_support_task_goes_to_internal_channel(make_client, api):
+    route = api.post("http://localhost:8089/api/notifications/internal").mock(
+        return_value=httpx.Response(200, json={"notificationId": 2, "status": "SENT", "message": "x"}))
+    await call(make_client(), "create_support_task", {"workflow_id": "WF-ABC12345", "summary": "replacement failed"})
+    assert json.loads(route.calls[0].request.content)["channel"] == "SLACK"

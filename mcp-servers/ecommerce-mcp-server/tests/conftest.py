@@ -16,7 +16,7 @@ def identity(monkeypatch):
     """Pretend an authenticated caller; tests change it via the returned holder."""
     holder = {"value": IDENT}
     fn = lambda: holder["value"]  # noqa: E731
-    for mod in ("mcp_common.guardrails", "mcp_common.spring", "mcp_common.audit"):
+    for mod in ("mcp_common.guardrails", "mcp_common.spring", "mcp_common.audit", "app.tools.write_tools"):
         monkeypatch.setattr(f"{mod}.current_identity", fn)
     return holder
 

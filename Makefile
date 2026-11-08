@@ -1,5 +1,5 @@
 # Convenience targets. Run `make help` for the list.
-.PHONY: help env infra up down logs ps topics psql build-java run-agent run-mcp test-mcp run-ui clean
+.PHONY: help env infra up down logs ps topics psql build-java run-agent test-agent run-mcp test-mcp run-ui clean
 
 help:        ## Show this help
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -34,8 +34,11 @@ psql:        ## Open a psql shell
 build-java:  ## Build all Spring Boot services
 	cd spring-boot-services && mvn clean package -DskipTests
 
-run-agent:   ## Run agent-host locally
-	cd agent-host && uvicorn app.main:app --reload --port 8092
+run-agent:   ## Run agent-host locally (needs Python 3.10+ and its own venv)
+	cd agent-host && PYTHONPATH=. uvicorn app.main:app --reload --port 8092
+
+test-agent:  ## Run agent-host tests
+	cd agent-host && PYTHONPATH=. python -m pytest -q
 
 run-mcp:     ## Run the ecommerce MCP server locally (needs Python 3.10+)
 	cd mcp-servers/ecommerce-mcp-server && PYTHONPATH=..:. python -m app.main

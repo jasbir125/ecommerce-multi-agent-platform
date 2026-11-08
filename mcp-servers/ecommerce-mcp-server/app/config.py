@@ -18,12 +18,13 @@ class Settings(BaseSettings):
     inventory_service_url: str = "http://localhost:8084"
     approval_service_url: str = "http://localhost:8085"
     audit_service_url: str = "http://localhost:8087"
+    notification_service_url: str = "http://localhost:8089"
 
     ecommerce_mcp_port: int = Field(8090, alias="ECOMMERCE_MCP_PORT")
     mcp_write_tools_enabled: bool = True
     mcp_max_refund_amount: Decimal = Decimal("500")
     mcp_max_quantity: int = 5
-    mcp_writes_per_minute: int = 10
+    mcp_writes_per_minute: int = 30
 
     @property
     def outbound_token(self) -> str:

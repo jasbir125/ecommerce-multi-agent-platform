@@ -26,6 +26,8 @@ x-internal-env: &internal-env
   KAFKA_BOOTSTRAP_SERVERS: kafka:19092
   REDIS_URL: redis://redis:6379
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  OTEL_HTTP_ENDPOINT: http://otel-collector:4318
+  DATABASE_URL: postgresql://${POSTGRES_USER:-ecommerce}:${POSTGRES_PASSWORD:-ecommerce_local_pw}@postgres:5432/${POSTGRES_DB:-ecommerce}
   MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
   PLATFORM_SERVICE_TOKEN: ${MCP_SERVICE_TOKEN:-local-demo-token}
   PLATFORM_AUDIT_SERVICE_URL: http://audit-service:8087
@@ -314,6 +316,8 @@ services:
     ports: ["8092:8092"]
     environment: *internal-env
     depends_on:
+      ecommerce-mcp-server: { condition: service_started }
+      policy-mcp-server: { condition: service_started }
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       kafka: { condition: service_healthy }

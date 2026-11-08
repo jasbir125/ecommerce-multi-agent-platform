@@ -55,9 +55,11 @@ def register(mcp: FastMCP, deps: Deps) -> None:
 
     @mcp.tool(annotations=READ_ONLY)
     async def check_inventory(product_id: str) -> dict[str, Any]:
-        """Check current price and available quantity of one product."""
+        """Check current price, category and available quantity of one product."""
         p = await c.inventory.get(f"/api/inventory/{product_id}")
-        return {k: p.get(k) for k in ("productId", "price", "currency", "availableQty")}
+        name, flagged = scrub(p.get("name"))
+        return mark({"productId": p.get("productId"), "name": name, "category": p.get("category"),
+                     "price": p.get("price"), "currency": p.get("currency"), "availableQty": p.get("availableQty")}, flagged)
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_approval_status(approval_id: str) -> dict[str, Any]:

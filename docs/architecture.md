@@ -26,3 +26,6 @@ _Detailed diagrams are added in later phases._
 
 ## MCP layer (Phase 3)
 Agent host -> `ecommerce-mcp-server` (8090) / `policy-mcp-server` (8091) -> Spring services. The MCP servers authenticate the host with a bearer token, take the end customer from `X-Customer-Id`, and expose 12 + 3 tools, resources and prompts. See `mcp-servers/README.md`.
+
+## Agent host (Phase 4)
+LangGraph supervisor workflow with specialist ReAct agents (read-only tools), a Postgres checkpointer, human approval via `interrupt`, deterministic execution with compensation, and Kafka/HTTP triggers. See `agent-host/README.md`.

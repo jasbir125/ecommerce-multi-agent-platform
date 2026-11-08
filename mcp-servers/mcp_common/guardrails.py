@@ -18,7 +18,7 @@ IDEMPOTENCY_KEY = re.compile(r"^[A-Za-z0-9._:-]{8,100}$")
 class WriteLimits:
     max_refund_amount: Decimal = Decimal("500")
     max_quantity: int = 5
-    writes_per_minute: int = 10
+    writes_per_minute: int = 30
 
 
 class WriteGuard:

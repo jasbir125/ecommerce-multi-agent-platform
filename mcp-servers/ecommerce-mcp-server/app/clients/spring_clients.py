@@ -14,6 +14,7 @@ class Clients:
     inventory: SpringClient
     approvals: SpringClient
     audit: SpringClient
+    notifications: SpringClient
 
     @classmethod
     def from_settings(cls, s: Settings) -> "Clients":
@@ -25,4 +26,5 @@ class Clients:
             inventory=SpringClient(s.inventory_service_url, t),
             approvals=SpringClient(s.approval_service_url, t),
             audit=SpringClient(s.audit_service_url, t),
+            notifications=SpringClient(s.notification_service_url, t),
         )

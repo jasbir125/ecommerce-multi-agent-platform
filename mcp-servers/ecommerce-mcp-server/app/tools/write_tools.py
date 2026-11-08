@@ -9,6 +9,8 @@ from typing import Any
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from mcp_common.security import current_identity
+
 from app.deps import Deps
 
 WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False)
@@ -70,3 +72,23 @@ def register(mcp: FastMCP, deps: Deps) -> None:
         await audit.record("TOOL_CREATE_CARRIER_CASE", workflow_id, {"orderId": order_id})
         return await c.shipments.post(f"/api/shipments/{order_id}/carrier-case",
                                       {"workflowId": workflow_id, "reason": reason[:300] or None})
+
+    @mcp.tool(annotations=WRITE)
+    async def notify_customer(workflow_id: str, template: str, params: dict[str, str] | None = None) -> dict[str, Any]:
+        """Send the current customer a message from a fixed template (REFUND_INITIATED, REPLACEMENT_CREATED,
+        MANUAL_REVIEW, SHIPMENT_VERIFICATION_FAILED, REQUEST_RECEIVED). Result templates are verified against
+        the owning service before sending. The recipient is the authenticated customer, never an argument."""
+        await guard.check("notify_customer", workflow_id)
+        customer = current_identity().customer_id
+        await audit.record("TOOL_NOTIFY_CUSTOMER", workflow_id, {"template": template})
+        return await c.notifications.post("/api/notifications/customer", {
+            "workflowId": workflow_id, "customerId": customer, "channel": "EMAIL",
+            "template": template, "params": params or {}})
+
+    @mcp.tool(annotations=WRITE)
+    async def create_support_task(workflow_id: str, summary: str) -> dict[str, Any]:
+        """Alert the internal support team (Slack) that a workflow needs a human, e.g. after a partial failure."""
+        await guard.check("create_support_task", workflow_id)
+        await audit.record("TOOL_CREATE_SUPPORT_TASK", workflow_id, {"summary": summary[:200]})
+        return await c.notifications.post("/api/notifications/internal", {
+            "workflowId": workflow_id, "channel": "SLACK", "message": summary[:500]})

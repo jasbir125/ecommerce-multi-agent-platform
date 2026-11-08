@@ -4,7 +4,7 @@ An enterprise-grade Multi-Agent Ecommerce Order Recovery Platform. Demo workflow
 
 > **Core rule:** the model can suggest an action, but only authorized application code and domain services can execute it.
 
-**Status: Phase 3 complete.** Infrastructure, the nine Spring Boot services and the two FastMCP servers are implemented and tested end to end. The agent host and Streamlit UI are still placeholders (Phases 4-6).
+**Status: Phase 4 complete.** Infrastructure, the nine Spring Boot services, the two FastMCP servers and the LangGraph agent host are implemented and tested end to end. Only the Streamlit UI is still a placeholder (Phase 6), and the deeper RAG work is Phase 5.
 
 ## Layout
 
@@ -63,7 +63,10 @@ make test-mcp                                                     # 36 unit test
 cd mcp-servers/ecommerce-mcp-server && PYTHONPATH=..:. python -m app.main   # MCP on :8090/mcp
 cd mcp-servers/policy-mcp-server    && PYTHONPATH=..:. python -m app.main   # MCP on :8091/mcp
 python mcp-servers/scripts/smoke_test.py                          # live end-to-end check (stack must be up)
-cd agent-host && uvicorn app.main:app --reload --port 8092        # placeholder until Phase 4
+# agent host (separate venv: it needs a different `mcp` version than fastmcp)
+uv venv --python 3.12 .venv-agent && uv pip install --python .venv-agent/bin/python -r agent-host/requirements-dev.txt
+cd agent-host && ../.venv-agent/bin/python -m pytest -q                       # 40 tests
+python agent-host/scripts/e2e_demo.py                             # live scenario with real model calls
 ```
 See `mcp-servers/README.md` for the tool list and security model.
 
@@ -121,7 +124,7 @@ Full 17-step script: `docs/demo-script.md` (filled in Phase 7). Scenarios and go
 1. **Phase 1** — monorepo, Compose, schema, topics, README ✅
 2. **Phase 2** — Spring Boot services (Spring AI, REST, Kafka, DB, OpenTelemetry) ✅
 3. **Phase 3** — FastMCP ecommerce + policy servers ✅
-4. LangGraph agent host (supervisor + specialists)
+4. **Phase 4** — LangGraph agent host (supervisor + specialists) ✅
 5. Production RAG (pgvector, hybrid retrieval, reranking, caching, grounding, citations)
 6. Streamlit UI
 7. Guardrails, security, observability, evaluation datasets
@@ -139,5 +142,12 @@ Full 17-step script: `docs/demo-script.md` (filled in Phase 7). Scenarios and go
 - **Write tools** are guarded (workflow id, idempotency key, amount/quantity limits, rate limit, audit) and only *request* actions; the Spring services still re-check everything.
 - Catalog and policy text is scanned for prompt-injection phrases; flagged text is withheld and audited.
 
+## Phase 4 design notes
+- **Agents read, code acts.** LLM agents only get read-only MCP tools. Approval requests, refund, inventory, replacement and notifications are performed by deterministic nodes, after the approval status is re-read from approval-service.
+- **Parallel where safe:** order and shipment run together, then policy, product and risk run together.
+- **Human in the loop:** the graph pauses (`interrupt`) with state in Postgres; a manager's decision publishes `workflow.approval.decided`, which resumes the run.
+- **Failure handling:** unverified shipment or weak policy evidence escalates without a refund; a failed replacement releases the reserved stock, keeps the refund and ends `PARTIALLY_COMPLETED`.
+- Trigger by Kafka (`workflow.started`) or HTTP (`/api/agent/runs`, with SSE streaming). See `agent-host/README.md`.
+
 ## Model routing
-`MODEL_PROVIDER` selects anthropic/openai/bedrock. Per-agent models are set via `MODEL_*` variables (all Sonnet to start; see `recommended_model`).
+`MODEL_PROVIDER` selects anthropic/openai (bedrock is Phase 8). Per-agent models are set via `MODEL_*` variables (all Sonnet to start; see `recommended_model`).

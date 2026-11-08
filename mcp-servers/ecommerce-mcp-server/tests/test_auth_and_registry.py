@@ -2,7 +2,8 @@ from mcp_common.security import RateLimiter, TokenAuthMiddleware
 
 EXPECTED_TOOLS = {"get_order_status", "get_payment_status", "get_shipment_status", "search_products", "check_inventory",
                   "get_approval_status", "create_approval_request", "initiate_refund", "reserve_inventory",
-                  "release_inventory", "create_replacement_order", "create_carrier_case"}
+                  "release_inventory", "create_replacement_order", "create_carrier_case", "notify_customer",
+                  "create_support_task"}
 
 
 async def run_asgi(app, path="/mcp", auth=None):
