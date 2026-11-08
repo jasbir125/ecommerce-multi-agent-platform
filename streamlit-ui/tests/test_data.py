@@ -55,7 +55,7 @@ def test_candidates_show_scores_and_what_became_of_each_passage():
     rows = candidate_rows(RAG)
     assert [r["section"] for r in rows] == ["Delayed shipments", "Refund method and timing"]
     assert rows[0]["used_in_answer"] and rows[0]["evidence"].startswith("Orders delayed")
-    assert not rows[1]["used_in_answer"] and rows[1]["in_evidence"] and rows[1]["model_says_relevant"] == "no"
+    assert not rows[1]["used_in_answer"] and rows[1]["in_evidence"]
     assert candidate_rows(None) == []
 
 

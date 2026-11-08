@@ -6,8 +6,7 @@ import pytest
 from app.rag.context_builder import apply_region_precedence, build_context, compress, render
 from app.rag.grounding_validator import numbers, validate
 from app.rag.models import Chunk, ContextItem, ContextPack, Statement
-from app.rag.query_rewriter import clean_query, merge_queries
-from app.rag.reranker import Ranking, apply_ranking
+from app.rag.pipeline import clean_query
 from app.rag.retriever import CircuitBreaker, PolicyRetriever, RetrievalUnavailable
 
 
@@ -103,26 +102,9 @@ def test_compress_keeps_relevant_sentences_in_order():
     assert "delayed three days" in out and "Cafeteria" not in out
 
 
-# ---------------------------------------------------------------- query rewriter
-def test_queries_keep_the_original_first_and_are_cleaned_and_capped():
-    out = merge_queries("My parcel is late!", ["shipment delayed refund", "shipment delayed refund", "x" * 400, "a", "b"])
-    assert out[0] == "My parcel is late!" and len(out) == 3 and len(set(out)) == 3 and all(len(q) <= 200 for q in out)
-
-
+# ------------------------------------------------------------------- query cleaning
 def test_pii_is_masked_in_queries():
     assert "jane@example.com" not in clean_query("mail jane@example.com about my refund")
-
-
-# ----------------------------------------------------------------------- reranker
-def test_valid_ranking_reorders_and_marks_relevance():
-    cs = [chunk("a"), chunk("b"), chunk("c")]
-    out = apply_ranking(cs, Ranking(order=[3, 1], relevant=[3]))
-    assert [c.chunk_id for c in out] == ["c", "a", "b"] and [c.llm_relevant for c in out] == [True, False, False]
-
-
-@pytest.mark.parametrize("bad", [Ranking(order=[], relevant=[]), Ranking(order=[9], relevant=[]), Ranking(order=[1], relevant=[0])])
-def test_malformed_ranking_is_rejected(bad):
-    assert apply_ranking([chunk("a"), chunk("b")], bad) is None
 
 
 # ---------------------------------------------------------------------- retriever
@@ -131,29 +113,18 @@ def src(cid, rerank=0.5, section="s"):
             "score": 0.5, "rerankScore": rerank, "injectionSuspected": False}
 
 
-async def test_results_from_several_queries_are_merged_and_shared_hits_rank_first():
+async def test_a_search_returns_the_chunks_best_first_with_the_services_confidence():
     async def search(args):
-        return {"q1": {"confidence": 0.5, "sources": [src("a"), src("b")]}, "q2": {"confidence": 0.7, "sources": [src("c"), src("b")]}}[args["query"]]
-    out = await PolicyRetriever(search).retrieve(["q1", "q2"], {})
-    assert [c.chunk_id for c in out["chunks"]][0] == "b" and out["confidence"] == 0.7 and out["queries"] == 2
+        return {"confidence": 0.7, "sources": [src("a"), src("b")], "diagnostics": {"corpusVersion": "5", "cacheHit": True}}
+    out = await PolicyRetriever(search).retrieve("q", {})
+    assert [c.chunk_id for c in out["chunks"]] == ["a", "b"] and out["confidence"] == 0.7
+    assert out["corpus_version"] == "5" and out["cache_hit"] is True
 
 
-async def test_queries_run_in_parallel():
+async def test_insufficient_evidence_from_the_service_means_zero_confidence():
     async def search(args):
-        await asyncio.sleep(0.2)
-        return {"confidence": 0.5, "sources": [src(args["query"])]}
-    t = asyncio.get_event_loop().time()
-    await PolicyRetriever(search).retrieve(["a", "b", "c"], {})
-    assert asyncio.get_event_loop().time() - t < 0.45
-
-
-async def test_one_failed_query_does_not_fail_the_retrieval():
-    async def search(args):
-        if args["query"] == "bad":
-            raise RuntimeError("boom")
-        return {"confidence": 0.5, "sources": [src("a")]}
-    out = await PolicyRetriever(search).retrieve(["good", "bad"], {})
-    assert len(out["chunks"]) == 1
+        return {"confidence": 0.9, "insufficientEvidence": True, "sources": []}
+    assert (await PolicyRetriever(search).retrieve("q", {}))["confidence"] == 0.0
 
 
 async def test_filters_are_forwarded_and_blank_ones_dropped():
@@ -162,7 +133,7 @@ async def test_filters_are_forwarded_and_blank_ones_dropped():
     async def search(args):
         seen.update(args)
         return {"confidence": 0.5, "sources": []}
-    await PolicyRetriever(search).retrieve(["q"], {"region": "EU", "version": ""})
+    await PolicyRetriever(search).retrieve("q", {"region": "EU", "version": ""})
     assert seen["region"] == "EU" and "version" not in seen and seen["query"] == "q"
 
 
@@ -176,17 +147,17 @@ async def test_breaker_opens_after_repeated_failures_then_recovers():
     r = PolicyRetriever(search, CircuitBreaker(threshold=2, reset_after=30, clock=lambda: now[0]))
     for _ in range(2):
         with pytest.raises(RetrievalUnavailable):
-            await r.retrieve(["q"], {})
+            await r.retrieve("q", {})
     n = len(calls)
     with pytest.raises(RetrievalUnavailable, match="breaker"):
-        await r.retrieve(["q"], {})
+        await r.retrieve("q", {})
     assert len(calls) == n                      # open: no call reached the service
     now[0] = 31.0                               # half-open: one attempt is allowed again
 
     async def healthy(args):
         return {"confidence": 0.5, "sources": [src("a")]}
     r.search = healthy
-    assert (await r.retrieve(["q"], {}))["chunks"] and r.breaker.failures == 0
+    assert (await r.retrieve("q", {}))["chunks"] and r.breaker.failures == 0
 
 
 async def test_a_slow_search_times_out():
@@ -194,7 +165,7 @@ async def test_a_slow_search_times_out():
         await asyncio.sleep(1)
         return {}
     with pytest.raises(RetrievalUnavailable):
-        await PolicyRetriever(search, timeout=0.05).retrieve(["q"], {})
+        await PolicyRetriever(search, timeout=0.05).retrieve("q", {})
 
 
 def test_region_precedence_removes_only_global_passages_of_the_same_policy_type():

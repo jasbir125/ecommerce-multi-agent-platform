@@ -33,7 +33,7 @@ def render(rag: dict | None, key: str = "rag") -> None:
     if rows:
         df = pd.DataFrame(rows)
         st.dataframe(df.drop(columns=["evidence"]).rename(columns={
-            "model_says_relevant": "model: relevant?", "in_evidence": "shown to model", "used_in_answer": "cited in answer"}),
+            "in_evidence": "shown to model", "used_in_answer": "cited in answer"}),
             hide_index=True, width="stretch",
             column_config={"relevance": st.column_config.ProgressColumn("relevance", min_value=0, max_value=1, format="%.2f"),
                            "reranker": st.column_config.ProgressColumn("reranker", min_value=0, max_value=1, format="%.2f"),
@@ -51,10 +51,6 @@ def render(rag: dict | None, key: str = "rag") -> None:
                 st.caption(f"{s.get('source', '')} · relevance {s.get('score', 0):.2f} · reranker {s.get('rerankScore', 0):.2f}")
 
     with st.expander("How this answer was produced"):
-        if g["queries"]:
-            st.markdown("**Search queries** (your wording first, then the rewrites)")
-            for q in g["queries"]:
-                st.write(f"- {q}")
         if g["timings"]:
             st.markdown("**Time per stage:** " + " · ".join(f"{k} {fmt_ms(v)}" for k, v in g["timings"].items()))
         if g["attempts"]:

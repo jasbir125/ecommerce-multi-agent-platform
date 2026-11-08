@@ -45,14 +45,9 @@ class Settings(BaseSettings):
     rag_max_context_tokens: int = 700
     rag_top_k: int = 4
     rag_min_retrieval_confidence: float = 0.30
-    rag_use_rewrite: bool = True
-    rag_use_llm_rerank: bool = True
     rag_min_support: float = 0.5            # share of a statement's content words that must appear in its cited passages
-    rag_answer_cache_ttl: int = 900
     rag_llm_timeout: float = 25.0
     rag_ask_per_minute: int = 30
-    model_rag_rewriter: str | None = None
-    model_rag_reranker: str | None = None
     model_rag_generator: str | None = None
 
     # --- security -----------------------------------------------------------------

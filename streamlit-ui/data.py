@@ -110,7 +110,6 @@ def candidate_rows(rag: dict[str, Any] | None) -> list[dict[str, Any]]:
         text = (cited.get(c["chunkId"]) or {}).get("text") or ""
         rows.append({"policy": c["policyKey"], "version": c["version"], "section": c.get("section") or "",
                      "relevance": round(float(c.get("score") or 0), 3), "reranker": round(float(c.get("rerankScore") or 0), 3),
-                     "model_says_relevant": {True: "yes", False: "no", None: "-"}[c.get("llmRelevant")],
                      "in_evidence": c.get("inContext", False), "used_in_answer": c.get("cited", False),
                      "evidence": text})
     return rows
@@ -129,7 +128,7 @@ def grounding_summary(rag: dict[str, Any] | None) -> dict[str, Any]:
         status, ic = "not grounded", "❌"
     return {"label": status, "icon": ic, "score": g.get("score"), "issues": g.get("issues") or [],
             "fallback": (d.get("generation") or {}).get("extractiveFallback"), "attempts": (d.get("generation") or {}).get("attempts"),
-            "queries": d.get("queries") or [], "timings": d.get("timingsMs") or {}, "cache_hit": d.get("cacheHit"),
+            "timings": d.get("timingsMs") or {}, "cache_hit": d.get("cacheHit"),
             "dropped": (d.get("context") or {}).get("dropped") or [], "reason": d.get("reason"), "latency_ms": d.get("latencyMs"),
             "degraded": (d.get("retrieval") or {}).get("degraded", False), "corpus_version": (d.get("retrieval") or {}).get("corpusVersion")}
 

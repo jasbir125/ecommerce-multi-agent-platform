@@ -34,16 +34,16 @@ RAG = {
     "sources": [{"policyId": "9", "chunkId": "1", "policyKey": "refund-policy", "version": "2", "source": "Refund Policy",
                  "section": "Delayed shipments", "score": 0.97, "rerankScore": 0.81,
                  "text": "Orders delayed by three (3) or more days are eligible for a full refund."}],
-    "diagnostics": {"queries": ["my parcel is late", "refund eligibility delayed delivery"], "cacheHit": False, "latencyMs": 4100,
+    "diagnostics": {"cacheHit": False, "latencyMs": 4100,
                     "timingsMs": {"retrieve": 120, "rewrite": 900, "generate": 1500},
                     "retrieval": {"confidence": 0.7, "candidates": 3, "degraded": False, "corpusVersion": "5"},
                     "context": {"items": 2, "tokens": 120, "dropped": ["injection:77"]},
                     "generation": {"attempts": 1, "extractiveFallback": False},
                     "grounding": {"passed": True, "score": 1.0, "issues": []},
                     "candidates": [{"chunkId": "1", "policyKey": "refund-policy", "version": "2", "section": "Delayed shipments", "score": 0.97,
-                                    "rerankScore": 0.81, "llmRelevant": True, "inContext": True, "cited": True},
+                                    "rerankScore": 0.81, "inContext": True, "cited": True},
                                    {"chunkId": "2", "policyKey": "refund-policy", "version": "2", "section": "Refund method and timing",
-                                    "score": 0.95, "rerankScore": 0.5, "llmRelevant": False, "inContext": True, "cited": False}]}}
+                                    "score": 0.95, "rerankScore": 0.5, "inContext": True, "cited": False}]}}
 
 RUN = {"workflowId": "WF-TEST000001", "customerId": "CUST-1001", "orderId": "ORD-7842", "status": "WAITING_FOR_APPROVAL",
        "intent": "DELAYED_ORDER_RECOVERY", "plan": ["order", "shipment", "policy"], "waitingForApproval": True, "approvalId": "APR-TEST000001",

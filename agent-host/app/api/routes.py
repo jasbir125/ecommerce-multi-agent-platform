@@ -105,7 +105,7 @@ async def ask_policy(body: AskPolicyRequest, request: Request, who: Principal = 
     """Answer a policy question with the full RAG pipeline: grounded, cited, validated, or an honest 'could not verify'."""
     from app.llm import BudgetExceeded, UsageTracker
     from app.mcp.client import McpGateway
-    from app.rag.factory import build_pipeline
+    from app.rag.pipeline import build_pipeline
 
     runner: RunManager = request.app.state.runner
     settings = request.app.state.settings

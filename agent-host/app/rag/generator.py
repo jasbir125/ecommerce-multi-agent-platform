@@ -1,8 +1,11 @@
 """Grounded answer generation prompts. The model may only restate what the numbered contexts say."""
 from __future__ import annotations
 
+from langchain_core.messages import HumanMessage, SystemMessage
+
+from app.llm import ModelFactory
 from app.rag.context_builder import render
-from app.rag.models import ContextPack
+from app.rag.models import ContextPack, GroundedAnswer
 
 SYSTEM = """You answer questions about company policy using ONLY the numbered <context> passages provided.
 Rules:
@@ -18,3 +21,14 @@ def user_prompt(question: str, pack: ContextPack, feedback: str = "", scope: str
     if feedback:
         p += f"\n\nYour previous answer was rejected: {feedback}\nAnswer again using only what the passages say."
     return p
+
+
+class ModelGenerator:
+    """Asks the model (through the project's ModelFactory: provider fallback and usage tracking) for a grounded answer."""
+
+    def __init__(self, models: ModelFactory, config: dict | None = None):
+        self.models, self.config = models, config or {}
+
+    async def generate(self, question: str, pack: ContextPack, feedback: str = "", scope: str = "") -> GroundedAnswer:
+        return await self.models.structured("rag_generator", GroundedAnswer, [
+            SystemMessage(SYSTEM), HumanMessage(user_prompt(question, pack, feedback, scope))], self.config)

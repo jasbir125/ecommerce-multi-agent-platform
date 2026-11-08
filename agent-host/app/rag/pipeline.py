@@ -1,8 +1,7 @@
-"""The RAG pipeline: rewrite -> retrieve (parallel) -> rerank -> build context -> generate -> validate -> cache.
+"""The agent-host side of RAG: retrieve (policy-service does hybrid search + rerank) -> build context -> generate -> validate -> cite.
 
-Every model stage has a safe fallback, and the order of preference is: a validated model answer, then a validated
-extractive answer (sentences copied from the evidence), then an honest "could not verify". It never returns an
-answer that failed grounding validation.
+The order of preference is: a validated model answer, then a validated extractive answer (sentences copied from the
+evidence), then an honest "could not verify". It never returns an answer that failed grounding validation.
 """
 from __future__ import annotations
 
@@ -13,25 +12,25 @@ import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from app.guardrails.input_guardrails import mask_pii
 from app.llm import BudgetExceeded
-from app.observability import metrics as m
+from app.observability import logctx, metrics as m
 from app.observability.tracing import span
-from app.rag.answer_cache import AnswerCache, make_key
 from app.rag.context_builder import apply_region_precedence, build_context
 from app.rag.grounding_validator import content_stems, describe, validate
-from app.observability import logctx
 from app.rag.models import (INSUFFICIENT_ANSWER, INSTRUCTION_LIKE, Chunk, ContextPack, GroundedAnswer, GroundingReport, RagResult, RagSource,
                             Statement)
-from app.rag.query_rewriter import clean_query, merge_queries
-from app.rag.reranker import Ranking, apply_ranking
 from app.rag.retriever import PolicyRetriever, RetrievalUnavailable
 
 log = logging.getLogger("rag.pipeline")
+_CTRL = re.compile(r"[\x00-\x1f\x7f]")
 
 
-class LlmPort(Protocol):
-    async def rewrite(self, question: str) -> list[str]: ...
-    async def rerank(self, question: str, chunks: list[Chunk], scope: str = "") -> Ranking: ...
+def clean_query(q: str, limit: int = 500) -> str:
+    return _CTRL.sub(" ", mask_pii(q)).strip()[:limit]
+
+
+class Generator(Protocol):
     async def generate(self, question: str, pack: ContextPack, feedback: str, scope: str = "") -> GroundedAnswer: ...
 
 
@@ -40,23 +39,20 @@ class RagSettings:
     max_context_tokens: int = 700
     top_k: int = 4
     min_retrieval_confidence: float = 0.30
-    use_rewrite: bool = True
-    use_llm_rerank: bool = True
     min_support: float = 0.5
     llm_timeout: float = 25.0
-    model_name: str = "default"
 
 
 class RagPipeline:
-    def __init__(self, retriever: PolicyRetriever, llm: LlmPort, cache: AnswerCache | None = None, settings: RagSettings | None = None):
-        self.retriever, self.llm, self.cache, self.s = retriever, llm, cache or AnswerCache(None), settings or RagSettings()
+    def __init__(self, retriever: PolicyRetriever, llm: Generator, settings: RagSettings | None = None):
+        self.retriever, self.llm, self.s = retriever, llm, settings or RagSettings()
 
     async def answer(self, question: str, filters: dict[str, Any] | None = None) -> RagResult:
         log.info("RAG > question=%s filters=%s", logctx.clean(question, 300), logctx.clean(filters or {}, 200))
         res = await self._answer(question, filters)
         d = res.diagnostics or {}
-        log.info("RAG < grounded=%s insufficient=%s confidence=%s cache_hit=%s queries=%s sources=%s dropped=%s timings_ms=%s answer=%s",
-                 res.grounded, res.insufficientEvidence, res.confidence, d.get("cacheHit"), d.get("queries"),
+        log.info("RAG < grounded=%s insufficient=%s confidence=%s cache_hit=%s sources=%s dropped=%s timings_ms=%s answer=%s",
+                 res.grounded, res.insufficientEvidence, res.confidence, d.get("cacheHit"),
                  [f"{x.policyKey}@v{x.version}({x.rerankScore})" for x in res.sources], (d.get("context") or {}).get("dropped"),
                  d.get("timingsMs"), logctx.clean(res.answer, 500))
         return res
@@ -65,82 +61,41 @@ class RagPipeline:
         t0 = time.perf_counter()
         diag: dict[str, Any] = {"timingsMs": {}, "stages": []}
         filters = {k: v for k, v in (filters or {}).items() if v}
-        question = clean_query(question, 500)
+        question = clean_query(question)
         if not question:
             return self._insufficient("empty question", diag, t0)
-
         scope = self._scope(filters)
 
-        # 1. cheap first retrieval with the customer's own words (the policy service caches it)
+        # 1. retrieve: the policy service runs the hybrid search, applies the filters and reranks (and caches in Redis)
         try:
-            raw0 = await self._timed("retrieve", diag, self.retriever.retrieve_raw([question], filters))
+            ret = await self._timed("retrieve", diag, self.retriever.retrieve(question, filters))
         except RetrievalUnavailable as e:
             diag["retrievalError"] = str(e)
             return self._insufficient("policy search unavailable", diag, t0, unavailable=True)
-        corpus = next((r.get("diagnostics", {}).get("corpusVersion") for r in raw0 if r.get("diagnostics", {}).get("corpusVersion")), "0")
-
-        # 2. answer cache: a validated answer is a pure function of (question, filters, policy corpus, models), so a
-        #    hit skips every model call. Any policy change bumps the corpus version and invalidates it.
-        key = make_key(question, filters, corpus, [], self.s.model_name)
-        cached = await self.cache.get(key)
-        if cached is not None:
-            cached.diagnostics = {**cached.diagnostics, "cacheHit": True, "latencyMs": self._ms(t0)}
-            m.RAG_ANSWERS.labels("cache_hit").inc()
-            return cached
-
-        # 3. rewrite (best effort) and search the extra query variants in parallel
-        queries = [question]
-        if self.s.use_rewrite:
-            queries = await self._stage("rewrite", diag, lambda: self._rewrite(question), default=queries)
-        diag["queries"] = queries
-        raw = list(raw0)
-        extra = [q for q in queries if q != question]
-        if extra:
-            try:
-                raw += await self._timed("retrieve", diag, self.retriever.retrieve_raw(extra, filters))
-            except RetrievalUnavailable as e:
-                diag["stages"].append({"stage": "retrieve-extra", "error": str(e)[:150]})   # the first retrieval still stands
-        ret = self.retriever.merge(raw)
         chunks: list[Chunk] = ret["chunks"]
         m.RAG_RELEVANCE.observe(ret["confidence"])
         if ret["degraded"]:
             m.RAG_DEGRADED.inc()
         diag["retrieval"] = {"confidence": ret["confidence"], "candidates": len(chunks), "degraded": ret["degraded"],
-                             "corpusVersion": corpus, "serviceCacheHits": ret["cache_hits"]}
+                             "corpusVersion": ret["corpus_version"], "serviceCacheHits": int(ret["cache_hit"])}
+        diag["cacheHit"] = ret["cache_hit"]
         if not chunks or ret["confidence"] < self.s.min_retrieval_confidence:
             return self._insufficient("no sufficiently relevant policy found", diag, t0)
         chunks, overridden = apply_region_precedence(chunks, filters.get("region"))
-        diag["candidates"] = candidates_report(chunks, None, set())
 
-        # 4. rerank with the model (listwise); keep retrieval order if it fails or returns nonsense
-        relevance_confirmed: bool | None = None
-        if self.s.use_llm_rerank and chunks:      # also for a single passage: relevance can veto it
-            head = chunks[:8]
-            ranking = await self._stage("rerank", diag, lambda: self.llm.rerank(question, head, scope), default=None)
-            reordered = apply_ranking(head, ranking) if ranking else None
-            if reordered is not None:
-                relevance_confirmed = any(c.llm_relevant for c in reordered)
-                diag["rerank"] = {"order": [c.chunk_id for c in reordered], "relevant": [c.chunk_id for c in reordered if c.llm_relevant]}
-                if not relevance_confirmed:
-                    return self._insufficient("the retrieved passages do not answer the question", diag, t0)
-                chunks = [c for c in reordered if c.llm_relevant] + [c for c in reordered if not c.llm_relevant] + chunks[8:]
-            else:
-                diag["rerank"] = {"fallback": "retrieval order"}
-
-        # 5. context within the token budget
+        # 2. context within the token budget; suspected prompt injection is withheld and reported
         pack = build_context(question, chunks[: self.s.top_k + 2], self.s.max_context_tokens, self.s.top_k)
         pack.dropped += overridden
-        # Injection attempts must be reported even when the chunk was ranked out of the evidence window.
         seen_ids = {d.split(":", 1)[1] for d in pack.dropped if ":" in d}
-        for c in chunks:
+        for c in chunks:                                  # report injection even when the chunk was ranked out of the evidence window
             if c.chunk_id not in seen_ids and (c.injection_suspected or INSTRUCTION_LIKE.search(c.text or "")):
                 pack.dropped.append(f"{'withheld' if c.injection_suspected else 'injection'}:{c.chunk_id}")
         diag["context"] = {"items": len(pack.items), "tokens": pack.tokens, "dropped": pack.dropped}
-        diag["candidates"] = candidates_report(chunks, pack, set())
+        diag["candidates"] = candidates_report(chunks, pack)
         if not pack.items:
             return self._insufficient("all retrieved passages were withheld or empty", diag, t0)
 
-        # 6. generate + validate (one retry with feedback), then extractive fallback
+        # 3. generate + validate (one retry with feedback), then extractive fallback
         statements, report, attempts, fallback = await self._generate_validated(question, pack, diag, scope)
         diag["generation"] = {"attempts": attempts, "extractiveFallback": fallback}
         diag["grounding"] = report.model_dump() if report else None
@@ -148,16 +103,9 @@ class RagPipeline:
             return self._insufficient("no answer passed grounding validation", diag, t0)
         if not statements:
             return self._insufficient("the model found no answer in the passages", diag, t0)
-
-        result = self._compose(statements, report, pack, ret["confidence"], relevance_confirmed, diag, t0)
-        if result.grounded:
-            await self.cache.set(key, result)
-        return result
+        return self._compose(statements, report, pack, ret["confidence"], diag, t0)
 
     # ----------------------------------------------------------------- stages
-    async def _rewrite(self, question: str) -> list[str]:
-        return merge_queries(question, await self.llm.rewrite(question))
-
     async def _generate_validated(self, question: str, pack: ContextPack, diag: dict[str, Any], scope: str = ""):
         feedback, report = "", None
         for attempt in (1, 2):
@@ -183,7 +131,7 @@ class RagPipeline:
         return None, report, 2, True
 
     def _compose(self, statements: list[Statement], report: GroundingReport, pack: ContextPack, retrieval_conf: float,
-                 relevance_confirmed: bool | None, diag: dict[str, Any], t0: float) -> RagResult:
+                 diag: dict[str, Any], t0: float) -> RagResult:
         used: list[int] = []
         for st in statements:
             for n in st.cites:
@@ -199,10 +147,8 @@ class RagPipeline:
             c = pack.get(n).chunk
             sources.append(RagSource(policyId=c.policy_id, chunkId=c.chunk_id, policyKey=c.policy_key, version=c.version,
                                      source=c.title, section=c.section, score=c.score, rerankScore=c.rerank_score, text=pack.get(n).text))
-        relevance = 1.0 if relevance_confirmed else 0.5 if relevance_confirmed is None else 0.0
-        confidence = round(min(1.0, 0.4 * retrieval_conf + 0.3 * relevance + 0.3 * report.score), 3)
+        confidence = round(min(1.0, 0.5 * retrieval_conf + 0.5 * report.score), 3)
         diag["latencyMs"] = self._ms(t0)
-        diag["cacheHit"] = False
         m.RAG_ANSWERS.labels("extractive_fallback" if diag.get("generation", {}).get("extractiveFallback") else "grounded").inc()
         m.RAG_CONFIDENCE.observe(confidence)
         m.RAG_RERANK_TOP.observe(max((s.rerankScore for s in sources), default=0.0))
@@ -210,7 +156,8 @@ class RagPipeline:
                          sources=sources, insufficientEvidence=False, diagnostics=diag)
 
     def _insufficient(self, reason: str, diag: dict[str, Any], t0: float, unavailable: bool = False) -> RagResult:
-        diag.update(reason=reason, latencyMs=self._ms(t0), cacheHit=False, unavailable=unavailable)
+        diag.update(reason=reason, latencyMs=self._ms(t0), unavailable=unavailable)
+        diag.setdefault("cacheHit", False)
         m.RAG_ANSWERS.labels("unavailable" if unavailable else "insufficient").inc()
         return RagResult(answer=INSUFFICIENT_ANSWER, confidence=0.2, grounded=False, policyVersion=None, sources=[],
                          insufficientEvidence=True, diagnostics=diag)
@@ -251,12 +198,11 @@ class RagPipeline:
         return int((time.perf_counter() - t) * 1000)
 
 
-def candidates_report(chunks: list[Chunk], pack: ContextPack | None, cited: set[str]) -> list[dict[str, Any]]:
-    """Everything that was retrieved and what became of it: reranked relevant, in the evidence, cited by the answer."""
-    in_ctx = {i.chunk.chunk_id for i in pack.items} if pack else set()
+def candidates_report(chunks: list[Chunk], pack: ContextPack) -> list[dict[str, Any]]:
+    """Everything that was retrieved and what became of it: in the evidence, cited by the answer."""
+    in_ctx = {i.chunk.chunk_id for i in pack.items}
     return [{"chunkId": c.chunk_id, "policyKey": c.policy_key, "version": c.version, "section": c.section,
-             "score": c.score, "rerankScore": c.rerank_score, "llmRelevant": c.llm_relevant,
-             "inContext": c.chunk_id in in_ctx, "cited": c.chunk_id in cited} for c in chunks[:12]]
+             "score": c.score, "rerankScore": c.rerank_score, "inContext": c.chunk_id in in_ctx, "cited": False} for c in chunks[:12]]
 
 
 def extractive_statements(question: str, pack: ContextPack, max_items: int = 2) -> list[Statement]:
@@ -269,3 +215,22 @@ def extractive_statements(question: str, pack: ContextPack, max_items: int = 2) 
         if best:
             out.append(Statement(text=best.strip(), cites=[item.n]))
     return out
+
+
+def build_pipeline(deps, gateway, config: dict | None = None) -> RagPipeline:
+    """Wires the pipeline to the real model factory and the policy search tool (over MCP)."""
+    from app.rag.generator import ModelGenerator
+    s = deps.settings
+
+    async def search(args: dict[str, Any]) -> dict[str, Any]:
+        return await gateway.call("search_policy", args)
+
+    return RagPipeline(PolicyRetriever(search, deps.search_breaker), ModelGenerator(deps.models, config),
+                       RagSettings(max_context_tokens=s.rag_max_context_tokens, top_k=s.rag_top_k,
+                                   min_retrieval_confidence=s.rag_min_retrieval_confidence, min_support=s.rag_min_support,
+                                   llm_timeout=s.rag_llm_timeout))
+
+
+def result_for_llm(result: RagResult) -> str:
+    """What a ReAct agent sees from ask_policy: the answer, its citations and the confidence."""
+    return result.model_dump_json()

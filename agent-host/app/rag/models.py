@@ -27,8 +27,6 @@ class Chunk(BaseModel):
     score: float = 0.0
     rerank_score: float = 0.0
     injection_suspected: bool = False
-    rrf: float = 0.0                       # merged rank across query variants
-    llm_relevant: bool | None = None       # set by the LLM reranker
 
     @classmethod
     def from_service(cls, s: dict[str, Any]) -> "Chunk":

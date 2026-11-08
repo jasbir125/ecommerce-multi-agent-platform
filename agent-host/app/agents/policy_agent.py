@@ -9,7 +9,7 @@ from langchain_core.tools import StructuredTool
 from app.agents.base import run_react, tool_results
 from app.guardrails.tool_guardrails import ToolCallError
 from app.models.policy import Citation, PolicyDecision
-from app.rag.factory import build_pipeline, result_for_llm
+from app.rag.pipeline import build_pipeline, result_for_llm
 from app.rag.models import RagResult
 
 SYSTEM = ("You are the Policy Agent. Use the ask_policy tool to find what company policy says about the customer's situation. "
