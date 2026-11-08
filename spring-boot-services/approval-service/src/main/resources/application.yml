@@ -4,9 +4,47 @@ server:
 spring:
   application:
     name: approval-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ecommerce}
+    username: ${SPRING_DATASOURCE_USERNAME:ecommerce}
+    password: ${SPRING_DATASOURCE_PASSWORD:ecommerce_local_pw}
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+    consumer:
+      group-id: recovery-approval-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+
+platform:
+  service-token: ${PLATFORM_SERVICE_TOKEN:${MCP_SERVICE_TOKEN:local-demo-token}}
+  security-enabled: true
+  audit-service-url: ${PLATFORM_AUDIT_SERVICE_URL:http://localhost:8087}
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info,prometheus
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://localhost:4318/v1/traces}
+  metrics:
+    tags:
+      application: approval-service
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name},%X{traceId:-},%X{correlationId:-}]"
+
+approval:
+  ttl-minutes: ${APPROVAL_TTL_MINUTES:30}

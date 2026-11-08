@@ -22,10 +22,13 @@ x-internal-env: &internal-env
   SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-ecommerce}
   SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-ecommerce}
   SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-ecommerce_local_pw}
-  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+  KAFKA_BOOTSTRAP_SERVERS: kafka:19092
   REDIS_URL: redis://redis:6379
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
+  PLATFORM_SERVICE_TOKEN: ${MCP_SERVICE_TOKEN:-local-demo-token}
+  PLATFORM_AUDIT_SERVICE_URL: http://audit-service:8087
   ORDER_SERVICE_URL: http://order-service:8081
   SHIPMENT_SERVICE_URL: http://shipment-service:8082
   PAYMENT_SERVICE_URL: http://payment-service:8083
@@ -51,7 +54,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       # Runs once on first start (empty data volume only).
-      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./infra/postgres/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ecommerce} -d ${POSTGRES_DB:-ecommerce}"]
       interval: 10s

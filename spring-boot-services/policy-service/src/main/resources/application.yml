@@ -4,9 +4,64 @@ server:
 spring:
   application:
     name: policy-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ecommerce}
+    username: ${SPRING_DATASOURCE_USERNAME:ecommerce}
+    password: ${SPRING_DATASOURCE_PASSWORD:ecommerce_local_pw}
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+    consumer:
+      group-id: recovery-policy-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+  ai:
+    model:
+      chat: none                       # policy-service only needs embeddings
+      embedding: ${POLICY_EMBEDDING_PROVIDER:hash}   # openai | hash (offline, lexical-ish)
+    openai:
+      api-key: ${OPENAI_API_KEY:not-set}
+      embedding:
+        options:
+          model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+
+platform:
+  service-token: ${PLATFORM_SERVICE_TOKEN:${MCP_SERVICE_TOKEN:local-demo-token}}
+  security-enabled: true
+  audit-service-url: ${PLATFORM_AUDIT_SERVICE_URL:http://localhost:8087}
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info,prometheus
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://localhost:4318/v1/traces}
+  metrics:
+    tags:
+      application: policy-service
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name},%X{traceId:-},%X{correlationId:-}]"
+
+policy:
+  embedding-provider: ${POLICY_EMBEDDING_PROVIDER:hash}
+  retrieval:
+    candidates: 20
+    min-confidence: 0.35        # below this we answer "insufficient evidence"
+    max-context-chars: 1500     # token budget proxy for returned context
+  refund:
+    min-delay-days: 3           # delayed this many days or more => eligible
+    approval-required-from: 0   # refund amounts >= this need approval (0 = always)
+  seed-on-startup: true

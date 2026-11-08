@@ -4,9 +4,68 @@ server:
 spring:
   application:
     name: workflow-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ecommerce}
+    username: ${SPRING_DATASOURCE_USERNAME:ecommerce}
+    password: ${SPRING_DATASOURCE_PASSWORD:ecommerce_local_pw}
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+    consumer:
+      group-id: recovery-workflow-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+  ai:
+    model:
+      chat: ${MODEL_PROVIDER:anthropic}       # anthropic | openai
+      embedding: none
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:not-set}
+      chat:
+        options:
+          model: ${ANTHROPIC_MODEL:claude-sonnet-5-5}
+          temperature: 0.0
+          max-tokens: 1024
+    openai:
+      api-key: ${OPENAI_API_KEY:not-set}
+      chat:
+        options:
+          model: ${OPENAI_MODEL:gpt-4o-mini}
+          temperature: 0.0
+
+platform:
+  service-token: ${PLATFORM_SERVICE_TOKEN:${MCP_SERVICE_TOKEN:local-demo-token}}
+  security-enabled: true
+  audit-service-url: ${PLATFORM_AUDIT_SERVICE_URL:http://localhost:8087}
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info,prometheus
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: ${MANAGEMENT_OTLP_TRACING_ENDPOINT:http://localhost:4318/v1/traces}
+  metrics:
+    tags:
+      application: workflow-service
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name},%X{traceId:-},%X{correlationId:-}]"
+
+services:
+  order-url: ${ORDER_SERVICE_URL:http://localhost:8081}
+  audit-url: ${AUDIT_SERVICE_URL:http://localhost:8087}
+
+workflow:
+  max-message-length: 2000

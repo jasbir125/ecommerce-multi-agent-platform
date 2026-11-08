@@ -13,3 +13,7 @@ customer.notification.requested:3
 order.recovery.completed:3
 workflow.failed:3
 workflow.compensation.requested:3
+# Added in Phase 2 for mutations that had no topic in the original list
+order.cancelled:3
+inventory.reservation.released:3
+customer.notification.sent:3
