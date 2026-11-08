@@ -152,6 +152,11 @@ public class WorkflowService {
         }
     }
 
+    public List<Map<String, Object>> recentEvents(int limit, String topic) {
+        CallerHolder.requireRole("OPERATOR", "ADMIN");
+        return repo.recentEvents(limit, topic);
+    }
+
     /** Workflow, state history, audit trail and the Kafka events it produced. */
     @SuppressWarnings("unchecked")
     public Map<String, Object> trace(String workflowId) {

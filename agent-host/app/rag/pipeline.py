@@ -93,6 +93,7 @@ class RagPipeline:
         if not chunks or ret["confidence"] < self.s.min_retrieval_confidence:
             return self._insufficient("no sufficiently relevant policy found", diag, t0)
         chunks, overridden = apply_region_precedence(chunks, filters.get("region"))
+        diag["candidates"] = candidates_report(chunks, None, set())
 
         # 4. rerank with the model (listwise); keep retrieval order if it fails or returns nonsense
         relevance_confirmed: bool | None = None
@@ -113,6 +114,7 @@ class RagPipeline:
         pack = build_context(question, chunks[: self.s.top_k + 2], self.s.max_context_tokens, self.s.top_k)
         pack.dropped += overridden
         diag["context"] = {"items": len(pack.items), "tokens": pack.tokens, "dropped": pack.dropped}
+        diag["candidates"] = candidates_report(chunks, pack, set())
         if not pack.items:
             return self._insufficient("all retrieved passages were withheld or empty", diag, t0)
 
@@ -162,6 +164,9 @@ class RagPipeline:
                 if n not in used:
                     used.append(n)
         renumber = {n: i + 1 for i, n in enumerate(used)}      # [n] in the answer = position in sources[]
+        cited_ids = {pack.get(n).chunk.chunk_id for n in used}
+        for row in diag["candidates"]:
+            row["cited"] = row["chunkId"] in cited_ids
         answer = " ".join(f"{st.text.strip()} " + "".join(f"[{renumber[n]}]" for n in st.cites) for st in statements).strip()
         sources = []
         for n in used:
@@ -212,6 +217,14 @@ class RagPipeline:
     @staticmethod
     def _ms(t: float) -> int:
         return int((time.perf_counter() - t) * 1000)
+
+
+def candidates_report(chunks: list[Chunk], pack: ContextPack | None, cited: set[str]) -> list[dict[str, Any]]:
+    """Everything that was retrieved and what became of it: reranked relevant, in the evidence, cited by the answer."""
+    in_ctx = {i.chunk.chunk_id for i in pack.items} if pack else set()
+    return [{"chunkId": c.chunk_id, "policyKey": c.policy_key, "version": c.version, "section": c.section,
+             "score": c.score, "rerankScore": c.rerank_score, "llmRelevant": c.llm_relevant,
+             "inContext": c.chunk_id in in_ctx, "cited": c.chunk_id in cited} for c in chunks[:12]]
 
 
 def extractive_statements(question: str, pack: ContextPack, max_items: int = 2) -> list[Statement]:

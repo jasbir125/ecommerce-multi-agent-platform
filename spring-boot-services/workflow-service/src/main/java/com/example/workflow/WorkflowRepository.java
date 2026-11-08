@@ -61,9 +61,36 @@ public class WorkflowRepository {
     public List<Map<String, Object>> eventsFor(String workflowId) {
         return jdbc.sql("""
                 SELECT topic, event_id, (payload::jsonb)->>'type' AS type,
-                       (payload::jsonb)->>'correlationId' AS correlation_id, created_at, sent_at
+                       (payload::jsonb)->>'correlationId' AS correlation_id,
+                       (payload::jsonb)->>'causationId' AS causation_id, (payload::jsonb)->>'workflowId' AS workflow_id,
+                       (payload::jsonb)->'payload' AS body, created_at, sent_at
                 FROM outbox_event WHERE (payload::jsonb)->>'workflowId' = :w ORDER BY id""")
-                .param("w", workflowId).query().listOfRows();
+                .param("w", workflowId).query().listOfRows().stream().map(this::withParsedBody).toList();
+    }
+
+    /** Most recent events across all workflows (operator feed). */
+    public List<Map<String, Object>> recentEvents(int limit, String topic) {
+        return jdbc.sql("""
+                SELECT topic, event_id, (payload::jsonb)->>'type' AS type,
+                       (payload::jsonb)->>'correlationId' AS correlation_id,
+                       (payload::jsonb)->>'causationId' AS causation_id, (payload::jsonb)->>'workflowId' AS workflow_id,
+                       (payload::jsonb)->'payload' AS body, created_at, sent_at
+                FROM outbox_event WHERE (CAST(:t AS text) IS NULL OR topic = CAST(:t AS text))
+                ORDER BY id DESC LIMIT :n""")
+                .param("t", topic == null || topic.isBlank() ? null : topic).param("n", Math.max(1, Math.min(limit, 200)))
+                .query().listOfRows().stream().map(this::withParsedBody).toList();
+    }
+
+    private Map<String, Object> withParsedBody(Map<String, Object> row) {
+        Map<String, Object> out = new java.util.LinkedHashMap<>(row);
+        Object body = row.get("body");
+        try {
+            out.put("payload", body == null ? Map.of() : mapper.readValue(body.toString(), new TypeReference<Map<String, Object>>() { }));
+        } catch (JsonProcessingException e) {
+            out.put("payload", Map.of());
+        }
+        out.remove("body");
+        return out;
     }
 
     private Workflow map(java.sql.ResultSet rs) throws java.sql.SQLException {

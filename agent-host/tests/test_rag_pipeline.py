@@ -243,3 +243,12 @@ async def test_without_a_region_global_passages_are_kept():
     p, _ = pipeline(llm, search=good_search(sources=[glob, eu]))
     r = await p.answer("how many days do I have to return an item")
     assert r.sources[0].policyKey == "returns-all" or "30" in r.answer
+
+
+async def test_diagnostics_report_every_candidate_and_what_became_of_it():
+    p, _ = pipeline()
+    r = await p.answer(Q)
+    rows = {c["chunkId"]: c for c in r.diagnostics["candidates"]}
+    assert set(rows) == {"1", "2"}
+    assert rows["1"]["cited"] is True and rows["1"]["inContext"] is True and rows["1"]["llmRelevant"] is True
+    assert rows["2"]["cited"] is False and rows["2"]["inContext"] is True       # retrieved and shown to the model, but not used in the answer

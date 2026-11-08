@@ -1,5 +1,5 @@
 # Convenience targets. Run `make help` for the list.
-.PHONY: eval-rag eval-rag-holdout help env infra up down logs ps topics psql build-java run-agent test-agent run-mcp test-mcp run-ui clean
+.PHONY: eval-rag eval-rag-holdout help env infra up down logs ps topics psql build-java run-agent test-agent run-mcp test-mcp run-ui test-ui ui-smoke clean
 
 help:        ## Show this help
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -47,8 +47,14 @@ test-mcp:    ## Run MCP server tests
 	cd mcp-servers/ecommerce-mcp-server && PYTHONPATH=..:. python -m pytest -q
 	cd mcp-servers/policy-mcp-server && PYTHONPATH=..:. python -m pytest -q
 
-run-ui:      ## Run Streamlit locally
+run-ui:      ## Run Streamlit locally (needs its own venv, see streamlit-ui/README.md)
 	cd streamlit-ui && streamlit run app.py
+
+test-ui:     ## Run Streamlit UI tests
+	cd streamlit-ui && python -m pytest -q
+
+ui-smoke:    ## Drive the real UI end to end against the running stack (real model calls)
+	python streamlit-ui/scripts/live_smoke.py --order ORD-8801
 
 PY ?= python3   # needs httpx, e.g. make eval-rag PY=.venv-agent/bin/python
 

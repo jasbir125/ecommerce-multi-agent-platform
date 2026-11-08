@@ -59,10 +59,20 @@ _REPLACEMENT_CLAIM = re.compile(r"replacement[^.]*\b(created|placed|confirmed|on
 _IDS = re.compile(r"\b(?:RF|ORD|RSV|APR|CC)-[A-Z0-9]{6,}\b")
 
 
-def response_violations(text: str, execution: ExecutionResult | None, order_id: str) -> list[str]:
-    """The customer message may only state results that a service actually returned."""
+_HUMAN_FOLLOW_UP = re.compile(r"support (agent|team)[^.]*\b(follow|contact|review)|manual review|will (contact|reach out)", re.I)
+
+
+def response_violations(text: str, execution: ExecutionResult | None, order_id: str, status: str | None = None) -> list[str]:
+    """The customer message may only state results a service actually returned, must state the ones that are verified,
+    and must not contradict the outcome (for example promising human follow-up when everything completed)."""
     v: list[str] = []
     ex = execution or ExecutionResult()
+    if ex.refund_status in ("INITIATED", "COMPLETED") and ex.refund_id and ex.refund_id not in text:
+        v.append("MISSING_REFUND_ID")
+    if ex.replacement_order_id and ex.replacement_order_id not in text:
+        v.append("MISSING_REPLACEMENT_ID")
+    if status == "COMPLETED" and _HUMAN_FOLLOW_UP.search(text):
+        v.append("CONTRADICTS_OUTCOME")
     if _REFUND_CLAIM.search(text) and ex.refund_status not in ("INITIATED", "COMPLETED"):
         v.append("UNVERIFIED_REFUND_CLAIM")
     if _REPLACEMENT_CLAIM.search(text) and not ex.replacement_order_id:

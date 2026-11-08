@@ -99,6 +99,18 @@ async def _sse(events) -> StreamingResponse:
     return StreamingResponse(body(), media_type="text/event-stream")
 
 
+@router.get("/admin/metrics", dependencies=[Depends(authenticate)])
+async def admin_metrics(request: Request, hours: int = 24, who=Depends(caller)):
+    """Cost, token usage and RAG quality for the admin panel (OPERATOR or ADMIN only)."""
+    if not who[1] & {"OPERATOR", "ADMIN"}:
+        raise HTTPException(403, "operator role required")
+    from app.api import admin
+    try:
+        return await admin.metrics(request.app.state.settings, max(1, min(hours, 24 * 30)))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(503, {"code": "METRICS_UNAVAILABLE", "message": str(e)[:150]})
+
+
 @router.post("/rag/ask", dependencies=[Depends(authenticate)])
 async def ask_policy(body: AskPolicyRequest, request: Request, who=Depends(caller)):
     """Answer a policy question with the full RAG pipeline: grounded, cited, validated, or an honest 'could not verify'."""

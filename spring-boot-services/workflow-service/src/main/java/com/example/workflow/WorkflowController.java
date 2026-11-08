@@ -33,6 +33,11 @@ public class WorkflowController {
         return service.get(workflowId);
     }
 
+    @GetMapping("/events/recent")
+    public List<Map<String, Object>> recentEvents(@RequestParam(defaultValue = "50") int limit, @RequestParam(required = false) String topic) {
+        return service.recentEvents(limit, topic);
+    }
+
     @PostMapping("/{workflowId}/resume")
     public Workflow resume(@PathVariable String workflowId, @Valid @RequestBody ResumeRequest request) {
         return service.resume(workflowId, request);

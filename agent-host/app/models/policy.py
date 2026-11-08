@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -21,3 +23,4 @@ class PolicyDecision(BaseModel):
     citations: list[Citation] = Field(default_factory=list)
     summary: str = ""
     injection_suspected: bool = False
+    rag: dict[str, Any] = Field(default_factory=dict)   # the full RAG result (sources, scores, grounding) for the UI

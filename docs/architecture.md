@@ -32,3 +32,6 @@ LangGraph supervisor workflow with specialist ReAct agents (read-only tools), a 
 
 ## RAG (Phase 5)
 policy-service owns ingestion, embeddings, hybrid retrieval, reranking, caching and the deterministic eligibility check; agent-host `app/rag` adds query rewriting, model reranking, grounded generation and the grounding validator. See `docs/rag-optimization.md`.
+
+## UI (Phase 6)
+Streamlit calls workflow-service (workflows, trace, event feed), approval-service (decisions), the agent host (live SSE runs, run state, RAG, admin metrics) and audit-service. See `streamlit-ui/README.md`.

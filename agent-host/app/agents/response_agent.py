@@ -4,7 +4,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.guardrails.output_guardrails import response_violations
 
 SYSTEM = """You write a short, friendly message (max 3 sentences) to an ecommerce customer about their order request.
-State ONLY the outcomes listed under "Verified outcomes". Never mention a refund or replacement as done unless it is listed.
+State ONLY the outcomes listed under "Verified outcomes", and include every listed refund and replacement id. Never mention a refund or replacement as done unless it is listed.
+If everything completed, do not say that a human will follow up.
 Do not invent ids, dates or amounts. If the request needs a human, say a support agent will follow up."""
 
 
@@ -43,7 +44,7 @@ async def run(state, deps, config) -> tuple[str, list[str]]:
         msg = await deps.models.structured("response", _Reply, [
             SystemMessage(SYSTEM), HumanMessage(f"Verified outcomes:\n{outcomes(state)}")], config)
         text = msg.message.strip()
-        problems = response_violations(text, state.execution, state.order_id)
+        problems = response_violations(text, state.execution, state.order_id, state.status)
         if not problems:
             return text, notes
         notes.append(f"GUARDRAIL_RESPONSE_REJECTED: {', '.join(problems)}")

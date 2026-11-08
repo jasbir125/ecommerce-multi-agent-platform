@@ -217,7 +217,7 @@ CREATE TABLE evaluation_result (
     dataset      VARCHAR(100),
     test_case    VARCHAR(100),
     metric       VARCHAR(100) NOT NULL,
-    score        NUMERIC(5,4) NOT NULL,
+    score        NUMERIC(16,6) NOT NULL,                 -- ratios, token counts and costs all fit
     passed       BOOLEAN,
     detail       JSONB,
     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP

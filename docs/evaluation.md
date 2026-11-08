@@ -30,5 +30,5 @@ The full pipeline fixed both, because query rewriting rescued the first and the 
 13 questions is small, so add cases as real questions arrive.
 
 ## Workflow and guardrails
-Unit tests: agent-host 101, policy-service 44, MCP servers 39. Live scenario scripts: `agent-host/scripts/e2e_demo.py`, `mcp-servers/scripts/smoke_test.py`.
+Unit tests: agent-host 106, policy-service 44, MCP servers 39, Streamlit UI 48 (headless renders with `AppTest`). Live scenario scripts: `agent-host/scripts/e2e_demo.py`, `mcp-servers/scripts/smoke_test.py`, `streamlit-ui/scripts/live_smoke.py` (drives the real UI through request, approval, resume, inspection and admin).
 The 14-scenario workflow datasets listed in `evaluation/golden-datasets/` are filled in Phase 7.

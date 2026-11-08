@@ -37,7 +37,7 @@ class RunEvaluator:
                     await conn.execute(
                         "INSERT INTO evaluation_result (workflow_id, dataset, metric, score, passed, detail) "
                         "VALUES ($1, 'online', $2, $3, $4, $5::jsonb)",
-                        state.workflow_id, metric, min(score, 9999.0), None, json.dumps({"status": state.status}))
+                        state.workflow_id, metric, score, None, json.dumps({"status": state.status}))
             finally:
                 await conn.close()
         except Exception as e:  # noqa: BLE001 - evaluation must never fail a run

@@ -132,3 +132,30 @@ def test_tool_call_budget():
     assert p.check("order", "get_order_status", {"order_id": "ORD-7842"}) is None
     assert p.check("order", "get_order_status", {"order_id": "ORD-7842"}) is None
     assert "TOOL_BUDGET_EXCEEDED" in p.check("order", "get_order_status", {"order_id": "ORD-7842"})
+
+
+# -------------------------------------------- customer response must state verified outcomes
+def done_execution():
+    return ExecutionResult(refund_id="RF-ABC1234567", refund_status="INITIATED", replacement_order_id="ORD-XYZ1234567")
+
+
+def test_a_message_that_omits_a_verified_refund_or_replacement_is_rejected():
+    ex = done_execution()
+    assert "MISSING_REFUND_ID" in response_violations("Your order is complete. Thanks!", ex, "ORD-7842", "COMPLETED")
+    assert "MISSING_REPLACEMENT_ID" in response_violations("Refund RF-ABC1234567 for ORD-7842 has been initiated.", ex, "ORD-7842", "COMPLETED")
+
+
+def test_promising_human_follow_up_after_a_completed_recovery_is_rejected():
+    ex = done_execution()
+    text = "Refund RF-ABC1234567 initiated and replacement ORD-XYZ1234567 created. A support agent will follow up on your refund."
+    assert "CONTRADICTS_OUTCOME" in response_violations(text, ex, "ORD-7842", "COMPLETED")
+
+
+def test_a_complete_accurate_message_passes():
+    ex = done_execution()
+    text = "Your refund RF-ABC1234567 for order ORD-7842 has been initiated and your replacement order ORD-XYZ1234567 has been created."
+    assert response_violations(text, ex, "ORD-7842", "COMPLETED") == []
+
+
+def test_human_follow_up_is_fine_when_the_case_was_escalated():
+    assert response_violations("A support agent will follow up on your request.", None, "ORD-7842", "ESCALATED") == []

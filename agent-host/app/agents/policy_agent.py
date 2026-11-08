@@ -66,7 +66,7 @@ async def run(state, deps, config) -> dict:
         reasons=v.get("reasons", []), policy_key=v.get("policyKey"), policy_version=v.get("policyVersion"),
         rag_confidence=rag.confidence, grounded=rag.grounded, insufficient_evidence=rag.insufficientEvidence,
         citations=[Citation(policy_key=s.policyKey, version=s.version, source=s.source, score=s.rerankScore) for s in rag.sources],
-        summary=rag.answer[:600], injection_suspected=injection)
+        summary=rag.answer[:600], injection_suspected=injection, rag=rag.model_dump())
     return {"policy": decision, "errors": notes, "_detail": summary[:300],
             "evidence": [f"policy {decision.policy_key} v{decision.policy_version}: refund_eligible={decision.refund_eligible} {decision.reasons}",
                          f"policy evidence (conf {rag.confidence}): {rag.answer[:200]}"]}

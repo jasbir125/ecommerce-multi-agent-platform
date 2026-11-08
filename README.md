@@ -4,7 +4,7 @@ An enterprise-grade Multi-Agent Ecommerce Order Recovery Platform. Demo workflow
 
 > **Core rule:** the model can suggest an action, but only authorized application code and domain services can execute it.
 
-**Status: Phase 5 complete.** Infrastructure, the nine Spring Boot services, the two FastMCP servers, the LangGraph agent host and a production-grade policy RAG are implemented and tested end to end. Only the Streamlit UI is still a placeholder (Phase 6).
+**Status: Phase 6 complete.** Infrastructure, the nine Spring Boot services, the two FastMCP servers, the LangGraph agent host, a production-grade policy RAG and the Streamlit operations UI are implemented and tested end to end. Guardrail/evaluation datasets (Phase 7) and Bedrock deployment (Phase 8) remain.
 
 ## Layout
 
@@ -72,9 +72,13 @@ See `mcp-servers/README.md` for the tool list and security model.
 
 ## Streamlit commands
 ```bash
-pip install -r streamlit-ui/requirements.txt
-cd streamlit-ui && streamlit run app.py        # http://localhost:8501
+make up                                  # the UI is part of the stack: http://localhost:8501
+uv venv --python 3.12 .venv-ui && uv pip install --python .venv-ui/bin/python -r streamlit-ui/requirements-dev.txt
+cd streamlit-ui && ../.venv-ui/bin/streamlit run app.py        # or run it locally against the containers
+../.venv-ui/bin/python -m pytest -q                            # 48 tests
+python scripts/live_smoke.py --order ORD-8801                  # drive the real UI end to end (real model calls)
 ```
+Deep link: `http://localhost:8501/?as=manager&page=Approvals`. See `streamlit-ui/README.md`.
 
 ## API testing examples
 Every call needs `X-Service-Token` (value of `MCP_SERVICE_TOKEN`) and, for customer-scoped data, `X-Customer-Id`. Approvals need `X-Roles: MANAGER`; workflow resume needs `X-Roles: AGENT`.
@@ -113,12 +117,12 @@ make topics
 - Real keys live only in `.env`. Services authenticate each other with a shared service token, and customer ownership is checked in the Spring services on every read and write. Local credentials (`ecommerce_local_pw`, `local-demo-token`, Grafana `admin/admin`) are for development only; Redis and Kafka run without auth/TLS locally.
 
 ## Demo instructions
-1. `make up` and wait for containers to be healthy.
-2. Open Streamlit (http://localhost:8501), enter customer `CUST-1001`, order `ORD-7842`, and submit the delayed-shipment request.
-3. Watch agent progress, RAG evidence and the approval requirement; approve from the UI.
-4. Check Kafka UI for events, Grafana for metrics.
+1. `make up` and wait until the *Service status* in the UI sidebar is green.
+2. Open http://localhost:8501, submit the delayed-shipment request for `ORD-8801` as the customer (live mode), and watch the agents work in parallel and pause for approval.
+3. Inspect the **Timeline**, **Agent trace** and **RAG evidence** tabs, then switch to *Manager* and approve from **Approvals**.
+4. The agent host resumes via Kafka and executes the refund and replacement; check **Kafka events**, **Audit trail** and the **Admin** panel (cost, RAG quality).
 
-Full 17-step script: `docs/demo-script.md` (filled in Phase 7). Scenarios and golden datasets: `evaluation/golden-datasets/`.
+The full 12-step script is in `docs/demo-script.md`.
 
 ## Roadmap
 1. **Phase 1** — monorepo, Compose, schema, topics, README ✅
@@ -126,7 +130,7 @@ Full 17-step script: `docs/demo-script.md` (filled in Phase 7). Scenarios and go
 3. **Phase 3** — FastMCP ecommerce + policy servers ✅
 4. **Phase 4** — LangGraph agent host (supervisor + specialists) ✅
 5. **Phase 5** — Production RAG (pgvector, hybrid retrieval, reranking, caching, grounding, citations) ✅
-6. Streamlit UI
+6. **Phase 6** — Streamlit UI ✅
 7. Guardrails, security, observability, evaluation datasets
 8. AWS Bedrock deployment docs and configuration
 
@@ -156,6 +160,12 @@ Full 17-step script: `docs/demo-script.md` (filled in Phase 7). Scenarios and go
 - **Measured:** on the 13 held-out questions the full pipeline answered 10/10 correctly, abstained on 3/3 unanswerable, fabricated nothing; about 3 s and $0.0002 uncached, about 50 ms cached. See `docs/rag-optimization.md`, `docs/hallucination-controls.md`, `docs/evaluation.md`.
 - `POST /api/agent/rag/ask` answers a policy question directly; the workflow's policy agent uses the same pipeline.
 - After pulling this phase, reset the database (`make clean`): the policy schema changed.
+
+## Phase 6 design notes (UI)
+- Five pages (request, policy assistant, workflow explorer, approvals, admin) over the existing APIs; live runs stream over server-sent events. Persona switching is a demo stand-in for login; the services enforce ownership and roles.
+- Every panel in the spec is present: chat, timeline, trace, RAG evidence, approvals, Kafka events, admin. The workflow viewer polls until the run ends.
+- Backend additions for the UI: event payloads and a recent-events feed (workflow-service), admin metrics (agent host), the full RAG result stored with each run, and a fix for token/cost metrics that were being dropped by an undersized column.
+- Tested headlessly (48 tests, Streamlit `AppTest`) and against the live stack (`live_smoke.py`); screenshots in `docs/screenshots/`.
 
 ## Model routing
 `MODEL_PROVIDER` selects anthropic/openai (bedrock is Phase 8). Per-agent models are set via `MODEL_*` variables (all Sonnet to start; see `recommended_model`).

@@ -330,8 +330,13 @@ services:
     build: ./streamlit-ui
     container_name: platform-streamlit
     ports: ["8501:8501"]
-    environment: *internal-env
-    depends_on: [agent-host]
+    environment:
+      <<: *internal-env
+      # The UI talks to these directly (the .env defaults point at localhost, which is the container itself).
+      STREAMLIT_API_BASE_URL: http://workflow-service:8088
+      STREAMLIT_APPROVAL_API_BASE_URL: http://approval-service:8085
+      AGENT_HOST_URL: http://agent-host:8092
+    depends_on: [agent-host, workflow-service, approval-service]
 
 networks:
   platform-net:
