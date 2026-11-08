@@ -416,7 +416,7 @@ Method used: build one phase at a time, write tests as you go, run the whole thi
 5. **Idempotency.** Every write has a unique key, so retries never duplicate refunds, reservations or complaints.
 6. **Don't trust text.** Customer messages and retrieved policy text are treated as *data*, never as instructions.
 7. **Grounded answers.** Policy answers must cite real text, or the system says it cannot verify.
-8. **Everything is measurable.** Traces, metrics, audit, and a test suite that includes tests proving the tests can fail.
+8. **Everything is measurable and traceable.** Traces, metrics, audit, a tracking number on every log line (so any request can be followed end to end with `make trace`), and a test suite that includes tests proving the tests can fail.
 9. **Provider-independent.** The model can be OpenAI, Claude or Bedrock, with automatic fallback.
 10. **Reproducible.** One command starts everything locally; Terraform describes the cloud version.
 
