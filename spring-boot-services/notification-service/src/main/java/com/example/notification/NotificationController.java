@@ -1,7 +1,7 @@
 package com.example.notification;
 
 import com.example.common.security.CallerHolder;
-import com.example.notification.NotificationRecords.*;
+import com.example.notification.NotificationService.*;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 

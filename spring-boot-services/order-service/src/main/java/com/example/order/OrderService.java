@@ -1,12 +1,15 @@
 package com.example.order;
 
+import java.util.Optional;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.DecimalMin;
 import com.example.common.audit.AuditClient;
 import com.example.common.events.EventPublisher;
 import com.example.common.security.CallerHolder;
 import com.example.common.util.Ids;
 import com.example.common.web.ApiException;
 import com.example.common.web.PlatformRestClient;
-import com.example.order.OrderRecords.*;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -21,15 +24,13 @@ import org.springframework.web.client.RestClient;
 @Service
 public class OrderService {
 
-    private final OrderRepository orders;
     private final JdbcClient jdbc;
     private final EventPublisher events;
     private final AuditClient audit;
     private final RestClient inventory;
 
-    public OrderService(OrderRepository orders, JdbcClient jdbc, EventPublisher events, AuditClient audit,
+    public OrderService(JdbcClient jdbc, EventPublisher events, AuditClient audit,
                         PlatformRestClient clients, @Value("${services.inventory-url}") String inventoryUrl) {
-        this.orders = orders;
         this.jdbc = jdbc;
         this.events = events;
         this.audit = audit;
@@ -42,7 +43,7 @@ public class OrderService {
      */
     public Order getOwned(String orderId) {
         String caller = CallerHolder.requireCustomerId();
-        Order order = orders.find(orderId)
+        Order order = find(orderId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "ORDER_NOT_FOUND", "Order not found"));
         if (!order.customerId().equals(caller)) {
             audit.record(null, "order-service", "SECURITY_UNAUTHORIZED_ORDER_ACCESS", caller,
@@ -56,7 +57,7 @@ public class OrderService {
         if (!customerId.equals(CallerHolder.requireCustomerId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "NOT_CUSTOMER", "Cannot list another customer's orders");
         }
-        return orders.findByCustomer(customerId);
+        return findByCustomer(customerId);
     }
 
     public OwnerResponse owner(String orderId) {
@@ -74,7 +75,7 @@ public class OrderService {
             throw new ApiException(HttpStatus.CONFLICT, "ORDER_NOT_CANCELLABLE",
                     "Order is " + o.status() + " and cannot be cancelled directly; use a carrier case/refund flow");
         }
-        if (!orders.cancel(orderId, o.version())) {
+        if (!cancelIfUnchanged(orderId, o.version())) {
             throw new ApiException(HttpStatus.CONFLICT, "CONCURRENT_UPDATE", "Order changed concurrently; retry");
         }
         events.publish("order.cancelled", orderId, "OrderCancelled", null, null,
@@ -95,7 +96,7 @@ public class OrderService {
                 .param("k", req.idempotencyKey()).query().listOfRows();
         if (!existing.isEmpty()) {
             String rid = (String) existing.get(0).get("replacement_order_id");
-            Order r = orders.find(rid).orElseThrow();
+            Order r = find(rid).orElseThrow();
             return new ReplacementResponse(rid, req.originalOrderId(), r.productId(), r.totalAmount(), false);
         }
         Order original = getOwned(req.originalOrderId());
@@ -131,5 +132,49 @@ public class OrderService {
         audit.record(req.workflowId(), "order-service", "REPLACEMENT_ORDER_CREATED", original.customerId(),
                 Map.of("replacementOrderId", newId, "reservationId", req.reservationId()));
         return new ReplacementResponse(newId, original.orderId(), productId, amount, true);
+    }
+
+    // ---- persistence
+    private static final String COLS = """
+            order_id, customer_id, status, payment_status, total_amount, currency,
+            product_id, product_name, quantity, replaces_order, version""";
+
+    private Optional<Order> find(String orderId) {
+        return jdbc.sql("SELECT " + COLS + " FROM customer_order WHERE order_id = :id")
+                .param("id", orderId).query(Order.class).optional();
+    }
+
+    private List<Order> findByCustomer(String customerId) {
+        return jdbc.sql("SELECT " + COLS + " FROM customer_order WHERE customer_id = :c ORDER BY created_at DESC")
+                .param("c", customerId).query(Order.class).list();
+    }
+
+    /** Optimistic update: succeeds only if the row is still at the version we read. */
+    private boolean cancelIfUnchanged(String orderId, long expectedVersion) {
+        return jdbc.sql("""
+                UPDATE customer_order SET status = 'CANCELLED', version = version + 1, updated_at = now()
+                WHERE order_id = :id AND version = :v AND status IN ('CONFIRMED','PROCESSING')""")
+                .param("id", orderId).param("v", expectedVersion).update() == 1;
+    }
+
+    // ---- DTOs of this service's API
+
+    public record Order(String orderId, String customerId, String status, String paymentStatus,
+                        BigDecimal totalAmount, String currency, String productId, String productName,
+                        Integer quantity, String replacesOrder, long version) {
+    }
+
+    public record OwnerResponse(String orderId, String customerId, boolean ownedByCaller) {
+    }
+
+    public record CancelResponse(String orderId, String status, boolean cancelled) {
+    }
+
+    public record ReplacementRequest(@NotBlank String workflowId, @NotBlank String originalOrderId,
+                                     @NotBlank String reservationId, @NotBlank String idempotencyKey) {
+    }
+
+    public record ReplacementResponse(String replacementOrderId, String originalOrderId, String productId,
+                                      BigDecimal amount, boolean created) {
     }
 }

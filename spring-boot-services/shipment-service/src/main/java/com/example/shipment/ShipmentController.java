@@ -1,7 +1,7 @@
 package com.example.shipment;
 
 import com.example.common.security.CallerHolder;
-import com.example.shipment.ShipmentRecords.*;
+import com.example.shipment.ShipmentService.*;
 import org.springframework.web.bind.annotation.*;
 
 @RestController

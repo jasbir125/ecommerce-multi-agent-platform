@@ -1,6 +1,6 @@
 package com.example.workflow;
 
-import com.example.workflow.WorkflowRecords.Workflow;
+import com.example.workflow.WorkflowService.Workflow;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

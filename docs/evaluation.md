@@ -15,19 +15,20 @@ Reports are written to `evaluation/reports/`. Quality gates make the scripts exi
 | Measure | Golden | Hold-out |
 |---|---|---|
 | Retrieval hit@1 / hit@3 / hit@6 / MRR (service only) | 0.875 / 0.906 / 0.969 / 0.891 | 0.90 / 0.90 / 0.90 / 0.90 |
-| Answered (of answerable) | 32/32 | 10/10 |
+| Answered (of answerable) | 31/32 | 9/10 |
 | Cited the right policy section | 100% | 100% |
 | Expected facts in the answer | 100% | 100% |
 | Answers grounded / fabricated numbers | 100% / 0 | 100% / 0 |
 | Abstained on unanswerable | 10/10 | 3/3 |
 | Adversarial cases passed | 8/8 | — |
 | Poisoned document ignored | yes | — |
-| Latency p50 / p95 (uncached) | 2.8 s / 3.6 s | 2.7 s / 3.5 s |
-| Tokens / cost per question | ~1,030 / $0.0002 | ~1,140 / $0.0002 |
+| Latency p50 / p95 | 1.1 s / 1.7 s | 1.0 s / 1.3 s |
+| Tokens / cost per question | ~430 / $0.00008 | ~470 / $0.00009 |
 
-Reading the numbers: the service-only retrieval layer alone is not enough (it abstained on one answerable hold-out question and answered one unanswerable one).
-The full pipeline fixed both, because query rewriting rescued the first and the model reranker rejected the second. Treat the hold-out set as the honest estimate;
-13 questions is small, so add cases as real questions arrive.
+Reading the numbers: the pipeline retrieves once from policy-service (hybrid search + rerank) and uses one model call to write the answer. It never fabricated
+a number and abstained on every unanswerable question. The price of having no model-based query rewrite is one paraphrased question on each set
+("lost-paraphrase", "h-signoff") that now ends in "could not verify" and is escalated instead of being answered. Treat the hold-out set as the honest
+estimate; 13 questions is small, so add cases as real questions arrive. (Measured with `make eval-rag` / `make eval-rag-holdout`, OpenAI embeddings and gpt-4o-mini.)
 
 ## Workflow and guardrails
 Unit tests: agent-host 106, policy-service 44, MCP servers 39, Streamlit UI 48 (headless renders with `AppTest`). Live scenario scripts: `mcp-servers/scripts/smoke_test.py`, `streamlit-ui/scripts/live_smoke.py` (drives the real UI through request, approval, resume, inspection and admin).

@@ -1,11 +1,13 @@
 package com.example.payment;
 
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.DecimalMin;
 import com.example.common.audit.AuditClient;
 import com.example.common.events.EventPublisher;
 import com.example.common.util.Ids;
 import com.example.common.web.ApiException;
 import com.example.common.web.PlatformRestClient;
-import com.example.payment.PaymentRecords.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -131,5 +133,17 @@ public class RefundService {
     private Optional<Refund> findByKey(String key) {
         return jdbc.sql("SELECT " + COLS + " FROM payment_refund WHERE idempotency_key = :k")
                 .param("k", key).query(Refund.class).optional();
+    }
+
+    // ---- DTOs of this service's API
+
+    public record RefundRequest(@NotBlank String workflowId, @NotBlank String orderId,
+                                @NotNull @DecimalMin("0.01") BigDecimal amount,
+                                String approvalId, @NotBlank String idempotencyKey) {
+    }
+
+    public record Refund(String refundId, String workflowId, String orderId, String approvalId,
+                         BigDecimal amount, String currency, String status, String idempotencyKey,
+                         LocalDateTime createdAt) {
     }
 }

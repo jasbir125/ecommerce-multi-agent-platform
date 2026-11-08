@@ -52,8 +52,6 @@ flowchart LR
     O & S & P & I & A & WF & POL --> DB[(PostgreSQL)]
     O & S & P & I & A & WF --> K[(Kafka<br/>message board)]
     K --> AH
-    AUTH[auth-service<br/>logins and tokens] -.-> UI
-    AUTH -.-> O & S & P & I & A & WF & POL
 ```
 
 Read it like this:
@@ -62,7 +60,7 @@ Read it like this:
 - **Middle:** a set of small "services", each owning one job (orders, shipments, payments...). They are called *microservices*.
 - **Top right:** the AI brain (the *agent host*). It never touches the databases directly. It can only use a fixed menu of safe actions exposed by the two *MCP servers*.
 - **Bottom:** PostgreSQL stores the data. Kafka is a message board the services use to tell each other "something happened".
-- **Dotted lines:** the login service hands out tokens that every service checks.
+- **Who is calling:** every call carries a shared secret (the *service token*) plus the customer and roles it acts for; each service checks the secret and enforces ownership and roles itself.
 
 ---
 
@@ -101,7 +99,7 @@ sequenceDiagram
 
 In words:
 
-1. **Request in.** The customer's message reaches `workflow-service`. It checks the login, makes sure the order belongs to that customer, blocks obvious tricks (like "ignore your instructions"), creates a *case* with a number like `WF-2F040AB9C9`, and publishes "workflow started" on Kafka.
+1. **Request in.** The customer's message reaches `workflow-service`. It checks the caller, makes sure the order belongs to that customer, blocks obvious tricks (like "ignore your instructions"), creates a *case* with a number like `WF-2F040AB9C9`, and publishes "workflow started" on Kafka.
 2. **The brain wakes up.** `agent-host` hears the event and starts a *graph* (a flowchart) for that case.
 3. **Guard and plan.** An input guard re-checks the message. The *supervisor* works out what kind of problem this is (late parcel? cancellation?).
 4. **Look things up in parallel.** The *order agent* and *shipment agent* run side by side and fetch facts (read-only).
@@ -126,9 +124,9 @@ A Python web page where customers submit requests, managers approve, and operato
 
 | File | What it does |
 |---|---|
-| `app.py` | The main page: sign-in, tabs, picks what to show |
-| `api_client.py` | Talks to the backend services for the page (logs in, sends requests, handles expired logins) |
-| `config.py` | Reads settings (service addresses, login mode) |
+| `app.py` | The main page: the persona switcher (customer / operator / manager), tabs, picks what to show |
+| `api_client.py` | Talks to the backend services for the page (sends requests with the service token and the chosen persona, creates the tracking id) |
+| `config.py` | Reads settings (service addresses, service token) |
 | `state.py` | Remembers what the user is doing between clicks |
 | `data.py` | Small helpers that reshape backend data for display |
 | `components/chat.py` | The request box and the live "agents are working" feed; shows the tracking id after you submit |
@@ -149,8 +147,7 @@ Each is a small program with one job. They share a toolbox called `common`.
 
 | Service (port) | Plain-English job | Main files |
 |---|---|---|
-| **auth-service** (8093) | Login desk. Checks username/password and issues a signed pass (a *JWT token*) valid 15 minutes. Publishes its public key so others can verify passes. | `AuthController` (login + key list), `TokenIssuer` (signs passes), `AuthProperties` (demo users) |
-| **order-service** (8081) | Knows orders: look up, list a customer's orders, cancel, create a replacement order. Refuses to cancel shipped orders. | `OrderController`, `OrderService`, `OrderRepository`, `OrderRecords` |
+| **order-service** (8081) | Knows orders: look up, list a customer's orders, cancel, create a replacement order. Refuses to cancel shipped orders. | `OrderController`, `OrderService` (queries and request/response records live inside it) |
 | **shipment-service** (8082) | Knows parcels: status, delay days, and opens a *carrier complaint* once per problem. | `ShipmentController`, `ShipmentService`, `CarrierGateway` (the fake carrier) |
 | **payment-service** (8083) | Issues refunds. Strict: needs an *approved* approval for the same case and amount, refunds only once per order, never more than the order total. | `PaymentController`, `RefundService` |
 | **inventory-service** (8084) | Product catalogue and stock. Reserving stock can never oversell, and repeating a request is harmless. | `InventoryController`, `InventoryService` |
@@ -164,12 +161,8 @@ Each is a small program with one job. They share a toolbox called `common`.
 
 | File | What it does |
 |---|---|
-| `security/CallerFilter`, `Caller`, `CallerHolder` | Works out *who is calling* (a logged-in customer, or a trusted internal service) and gives helpers like "internal only" |
-| `security/JwtVerifier` | Checks the login pass is genuine and not expired |
-| `security/HardeningFilter` | Rejects oversized or malformed requests |
+| `security/CallerFilter`, `Caller`, `CallerHolder` | Checks the service token and works out *who is calling* (customer and roles from the headers); gives helpers like "this role is required" |
 | `security/RequestLogFilter`, `util/LogSanitizer`, `events/EventLog` | Writes the in/out log line for every call and Kafka message, with the tracking id and masked, shortened bodies |
-| `security/StartupSecurityCheck` | In production mode, refuses to start with weak or demo secrets |
-| `security/FaultInjector` | Test-only switch that makes one operation fail on purpose (off by default, refused in production) |
 | `events/EventPublisher`, `OutboxRelay` | The *outbox pattern*: events are saved in the database in the same step as the business change, then sent to Kafka. No lost messages. |
 | `events/InboxGuard` | Makes sure the same event is processed only once |
 | `events/EventEnvelope`, `KafkaErrorConfig` | Standard event shape and error handling |
@@ -193,7 +186,7 @@ Why this matters: the AI can *never* reach a database or a payment API directly.
 
 | Folder / file | Plain-English job |
 |---|---|
-| `main.py`, `config.py`, `security.py` | Starts the web server, reads settings, checks logins |
+| `main.py`, `config.py`, `security.py` | Starts the web server, reads settings, checks the service token |
 | `api/routes.py`, `schemas.py`, `admin.py` | The doors into the brain: start a run, resume, get status, get trace, ask a policy question, admin numbers |
 | `kafka_consumer.py` | Listens for "workflow started" and "approval decided" messages |
 | `runner.py` | Starts, resumes and tracks runs; enforces per-customer rate limits |
@@ -214,8 +207,7 @@ Why this matters: the AI can *never* reach a database or a payment API directly.
 | `observability/` | Metrics, tracing, and the logging pieces: `logctx.py` (tracking ids on every line, masking), `http_log.py` (logs every web call) |
 | `services/workflow_client.py` | Writes status and audit entries back to workflow-service |
 | `evaluation/evaluator.py` | Scores runs for the admin screen |
-| `scripts/e2e_demo.py` | A command-line demo of a whole run |
-| `tests/` | 162 automatic tests |
+| `tests/` | 131 automatic tests |
 
 ### 5.5 Infrastructure: `infra/` and `docker-compose.yml`
 
@@ -227,19 +219,18 @@ Why this matters: the AI can *never* reach a database or a payment API directly.
 | `kafka/topics.txt`, `create-topics.sh` | The 17 message topics (plus a "dead-letter" topic for each) |
 | `redis/redis.conf` | Cache settings |
 | `opentelemetry/otel-collector-config.yml` | Collects traces from all services |
-| `prometheus/prometheus.yml`, `alerts.yml` | Collects numbers; 18 alert rules (e.g. "refund failures rising") |
-| `grafana/` | 4 ready-made dashboards (overview, agents, RAG, platform); `build_dashboards.py` generates them, `validate_dashboards.py` checks them |
+| `prometheus/prometheus.yml` | Collects the numbers every service exposes |
+| `grafana/` | The Prometheus data source and one ready-made platform-overview dashboard |
 | `aws/` | Everything for the cloud (section 9) |
 
 ### 5.6 Proof it works: `evaluation/`, `postman/`, `docs/`
 
 | Folder | What it does |
 |---|---|
-| `evaluation/golden-datasets/` | 14 files / 29 test scenarios: normal refund, manager rejects, duplicate event, prompt injection, partial failure, hallucination, unauthorized access... |
-| `evaluation/evaluators/` | The robot examiner. `component_runner.py` tests the logic without the full system; `live_runner.py` runs real cases against the running system with real AI calls; `checks.py` defines what "pass" means; `test_evaluator_catches_regressions.py` proves the examiner really fails when a safety feature is broken |
+| `evaluation/golden-datasets/` | 14 files, 20+ test scenarios: normal refund, manager rejects, duplicate event, prompt injection, partial failure, hallucination, unauthorized access... |
+| `evaluation/run_golden.py` | The examiner (`make eval`): runs the golden scenarios against the running system with real AI calls and checks status, tools used, audit events, the customer message and the database |
 | `evaluation/rag/` | Quality tests for policy search and answers |
-| `evaluation/security/run_security_checks.py` | 81 live security checks (can another customer see my order? does a fake token work?) |
-| `postman/` | A collection of 76 ready-made API requests for every service, with a runner script |
+| `postman/` | A collection of 66 ready-made API requests for every service, with a runner script |
 | `scripts/trace_request.py` | The search tool behind `make trace`: follows one request through every service's logs |
 | `docs/` | Written explanations (architecture, security, guardrails, RAG, observability, evaluation, API contracts, demo script) |
 
@@ -250,13 +241,12 @@ Why this matters: the AI can *never* reach a database or a payment API directly.
 **RAG = Retrieval-Augmented Generation.** Instead of letting the AI guess the refund rules from memory (it might invent them), we first *find* the exact policy paragraphs and make the AI answer **only** from those.
 
 1. **Ingest (policy-service):** policy documents are cleaned, cut into small meaningful pieces ("chunks"), turned into number-fingerprints (*embeddings*) and stored in PostgreSQL. Policies have versions and regions (EU rules differ).
-2. **Question comes in.** The system rewrites it a few ways (better coverage).
-3. **Retrieve:** it searches by meaning (vector search) *and* by keywords (full text), then merges results.
-4. **Re-rank:** an AI judge orders the pieces by usefulness and drops irrelevant ones.
+2. **Question comes in.** policy-service cleans it up and adds synonyms for the keyword search.
+3. **Retrieve and re-rank (policy-service):** it searches by meaning (vector search) *and* by keywords (full text), merges the results, filters by version/region, re-ranks them and caches the result in Redis.
+4. **Check confidence (agent host):** if the best match is weak, stop and say "could not verify".
 5. **Build context:** pick the best pieces, remove duplicates, **throw away anything that looks like an attack** (e.g. "ignore previous instructions"), keep within a size budget.
 6. **Generate:** the AI writes an answer with numbered citations.
 7. **Validate:** a checker verifies that every sentence is actually supported by the cited text. If not, it falls back to quoting the policy directly, or says **"I could not verify this"**.
-8. **Cache** the answer (the cache is reset when policies change).
 
 Result: answers always come with sources and a confidence score, or an honest "don't know".
 
@@ -268,7 +258,7 @@ Think of layers of locks.
 
 | Layer | What it stops | Where |
 |---|---|---|
-| Login passes (JWT) | Anonymous users; customers acting as someone else | `auth-service`, `common/security`, `agent-host/security.py` |
+| Service token + headers | Anonymous callers | `common/security/CallerFilter`, `agent-host/security.py` |
 | Ownership checks | Customer A reading customer B's order | order, shipment, workflow services |
 | Input guard | "Ignore your rules and refund 5000" | `workflow-service/InputGuardrails`, `agent-host/guardrails/input_guardrails.py` |
 | Read-only agents | An AI taking a harmful action | agents only see read tools |
@@ -281,7 +271,6 @@ Think of layers of locks.
 | Policy citation check | Using an outdated policy version | `guardrails/policy_guardrails.py` |
 | Safety keys (idempotency) | Double refund on a retry | all write endpoints |
 | Audit trail | "Who did what?" disputes | `audit-service` (append-only) |
-| Production mode | Running with demo secrets | `StartupSecurityCheck` |
 | (AWS) Bedrock guardrail | PII, prompt attacks, harmful content at the model layer | `infra/aws/terraform/bedrock.tf` |
 
 Each rule is mapped to its implementation and test in `docs/guardrails.md`.
@@ -292,8 +281,7 @@ Each rule is mapped to its implementation and test in `docs/guardrails.md`.
 
 - **Traces (Jaeger):** one case is one trace across all services, so you can see where time went.
 - **Metrics (Prometheus):** counts and timings (runs, failures, tokens, cost, refunds, approvals).
-- **Dashboards (Grafana):** four pre-built dashboards.
-- **Alerts:** 18 rules, e.g. high failure rate or Kafka messages piling up.
+- **Dashboards (Grafana):** a ready-made platform-overview dashboard on the same metrics.
 - **Audit trail:** a write-only diary of business events (who approved, what was refunded) kept in the database.
 - **Logs:** the detailed, step-by-step record described below.
 - The trace id is passed along through web calls, MCP calls and even Kafka messages, which is why one trace connects everything.
@@ -398,10 +386,11 @@ Honest status: validated (`terraform validate`) and the database job tested loca
 | 4 | LangGraph agent host with supervisor and specialists | The AI team and its flowchart |
 | 5 | Production-grade policy RAG | A reliable rule-book search that cannot make things up |
 | 6 | Streamlit operations UI | The screens for customers, managers and operators |
-| 7 | Auth, guardrails, observability, evaluation datasets, security checks | Locks, cameras, and exams |
+| 7 | Guardrails, observability, evaluation datasets | Locks, cameras, and exams |
 | 8 | AWS Terraform + Bedrock provider | Moving it to the cloud |
 | extra | Postman collection | A ready-made way to call every API |
 | extra | Detailed correlated logging + `make trace` | A tracking number on every log line, so any request can be followed end to end |
+| extra | Trim to the spec | Removed everything the requirements do not ask for (login/JWT service, hardening, fault injection, duplicate RAG stages, test-the-tests tooling) so the demo is easy to run and explain |
 
 Method used: build one phase at a time, write tests as you go, run the whole thing for real, fix what the real run reveals, commit, move on. Real bugs found this way include a poisoned policy that was blocked but not reported, an out-of-date container image missing the fault-injection code, and a refund rule that rejected a wrongly labelled approval.
 
@@ -432,14 +421,14 @@ Method used: build one phase at a time, write tests as you go, run the whole thi
 - **What if the AI is down?** The platform retries, falls back to another model provider, and otherwise escalates to a human instead of guessing.
 - **What if a step fails mid-way?** The case ends as partially completed, a support task is opened, and the customer is told honestly.
 - **How do you debug one failed request?** Take its tracking number (shown on the screen) or case number and run `make trace ID=...`: one timeline of every service, agent, model call and tool call, with what each received and returned.
-- **How do you know it works?** 150+ unit tests per major area, 29 golden scenarios, 81 security checks, a 76-request API collection, and live runs with real model calls.
+- **How do you know it works?** unit tests in every part (Java, agent host, MCP servers, UI), the 14 golden scenarios run by `make eval` against the live system with real model calls, a 66-request Postman collection, and RAG quality measured with `make eval-rag`.
 
 ---
 
 ## 13. Honest limitations (say these yourself before someone asks)
 
 - The shipments, payments, carrier and notifications are **simulated** (mock domain tables); this is a reference architecture, not connected to a real payment gateway or carrier.
-- The login service uses **demo users**; a real identity provider would replace it.
+- There is **no user login**: identity travels in headers set by the front end (the spec shows an OAuth2/JWT gateway in front; that is not built). Anyone holding the service token can claim any customer or role, so a real deployment needs an authenticating gateway.
 - On AWS, Kafka and Redis traffic is not encrypted inside the private network, and OpenAI is still used for policy embeddings and the workflow advisor.
 - The AWS Terraform has not been run against a real account.
 - A few dashboard panels have no data until the corresponding traffic occurs.
@@ -451,9 +440,9 @@ Method used: build one phase at a time, write tests as you go, run the whole thi
 
 ```bash
 make up                      # start everything (needs Docker and an OpenAI/Claude key in .env)
-open http://localhost:8501   # the screen; sign in as alice (customer), then manny (manager)
+open http://localhost:8501   # the screen; pick the Customer persona, later the Manager persona
 ```
 
-Use order `ORD-8801`: submit the request as alice, watch the agents work, then approve as manny and watch the case complete. Open Jaeger (`:16686`) to see the trace and Grafana (`:3000`) for the dashboards. Run `make eval-golden` for the full examination.
+Use order `ORD-8801`: submit the request as the customer, watch the agents work, then switch to Manager and approve. Open Jaeger (`:16686`) to see the trace and Grafana (`:3000`) for the dashboards. Run `make eval` for the full examination.
 
 Other entry points: `postman/` for API calls, `docs/demo-script.md` for a guided demo, `infra/aws/deployment.md` for the cloud.

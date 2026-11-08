@@ -1,10 +1,12 @@
 package com.example.inventory;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
 import com.example.common.audit.AuditClient;
 import com.example.common.events.EventPublisher;
 import com.example.common.util.Ids;
 import com.example.common.web.ApiException;
-import com.example.inventory.InventoryRecords.*;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -119,5 +121,20 @@ public class InventoryService {
 
     private static String blankToNull(String s) {
         return s == null || s.isBlank() ? null : s;
+    }
+
+    // ---- DTOs of this service's API
+
+    /** name/description come from the catalog and are untrusted text for any LLM that reads them. */
+    public record Product(String productId, String name, String description, String category,
+                          BigDecimal price, String currency, int availableQty) {
+    }
+
+    public record ReservationRequest(@NotBlank String workflowId, @NotBlank String productId,
+                                     @Min(1) @Max(5) int quantity, @NotBlank String idempotencyKey) {
+    }
+
+    public record Reservation(String reservationId, String workflowId, String productId, int quantity,
+                              String status, boolean created) {
     }
 }

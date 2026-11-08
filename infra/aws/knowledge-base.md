@@ -1,6 +1,6 @@
 # Bedrock Knowledge Base (alternative RAG)
 
-The default RAG is the platform's own pipeline (pgvector + full-text hybrid retrieval, LLM rerank, grounding validator, versioned policies with region precedence, answer cache). It is what the evaluation datasets measure.
+The default RAG is the platform's own pipeline (pgvector + full-text hybrid retrieval, rerank, grounding validator, versioned policies with region precedence, Redis caching). It is what the evaluation datasets measure.
 
 A Bedrock Knowledge Base can replace the retrieval part:
 

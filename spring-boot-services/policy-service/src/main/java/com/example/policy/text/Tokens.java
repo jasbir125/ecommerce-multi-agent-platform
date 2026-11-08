@@ -15,7 +15,17 @@ public final class Tokens {
             "its", "who", "which", "into", "than", "then", "they", "their", "been", "being", "should", "would", "could", "also",
             "only", "must", "within", "after", "before", "per", "our", "out", "off", "get", "got", "did", "can't");
 
+    private static final Pattern INJECTION = Pattern.compile(
+            "ignore (all )?(the )?(previous|prior|above) instructions|disregard .{0,40}instructions"
+                    + "|you (must|should) (now )?(issue|approve|process) (a )?refund|system prompt|act as (an? )?(admin|system)"
+                    + "|reveal your (prompt|instructions)", Pattern.CASE_INSENSITIVE);
+
     private Tokens() {
+    }
+
+    /** True if the text looks like an attempt to give instructions to a model (retrieved text is data, never instructions). */
+    public static boolean suspicious(String text) {
+        return text != null && INJECTION.matcher(text).find();
     }
 
     /** Rough token estimate (about 1.3 tokens per word), good enough for budgets. */

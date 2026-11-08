@@ -158,7 +158,7 @@ The full 12-step script is in `docs/demo-script.md`.
 - **Ingestion** is an async, incremental pipeline: extract, clean, semantic-chunk, reuse unchanged embeddings, batch-embed, store atomically, invalidate caches. Versioned, region/tenant/category-aware policies; archive without deleting.
 - **Retrieval** is hybrid (pgvector HNSW + full-text with synonyms, rank fusion), reranked, region-aware, compressed to a token budget and cached in Redis. It degrades to keyword search if embeddings fail.
 - **Answers** are generated from numbered evidence, then validated in code (citations, numbers, versions, polarity, injection). A failed answer is retried once, then replaced by verbatim evidence, then by an honest "could not verify".
-- **Measured:** on the 13 held-out questions the full pipeline answered 10/10 correctly, abstained on 3/3 unanswerable, fabricated nothing; about 3 s and $0.0002 uncached, about 50 ms cached. See `docs/rag-optimization.md`, `docs/hallucination-controls.md`, `docs/evaluation.md`.
+- **Measured:** on the 13 held-out questions the pipeline answered 9/10 correctly, abstained on 3/3 unanswerable, fabricated nothing; about 1 s and $0.0001 per question. See `docs/rag-optimization.md`, `docs/hallucination-controls.md`, `docs/evaluation.md`.
 - `POST /api/agent/rag/ask` answers a policy question directly; the workflow's policy agent uses the same pipeline.
 - After pulling this phase, reset the database (`make clean`): the policy schema changed.
 

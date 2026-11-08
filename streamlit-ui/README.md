@@ -15,12 +15,12 @@ Internal demo and operations console for the order recovery platform.
 ## Panels
 - **Timeline**: a Gantt chart of every step (overlapping bars ran in parallel) with status, retries, tool calls, tokens and errors.
 - **Agent trace**: supervisor reasoning and decision, specialist table, every MCP tool call, model calls, tokens and cost per agent, latency per step.
-- **RAG evidence**: confidence, grounding status, the answer with `[n]` citations, all retrieved passages with relevance and reranker scores, whether the model judged each relevant, whether it was shown to the model and whether it was cited; plus the rewritten queries, per-stage timings, withheld passages and any grounding issues.
+- **RAG evidence**: confidence, grounding status, the answer with `[n]` citations, all retrieved passages with relevance and reranker scores, whether each was shown to the model and whether it was cited; plus per-stage timings, withheld passages and any grounding issues.
 - **Kafka events**: topic, type, correlation and causation ids, delivery state, payload inspector.
 - **Admin**: failed and escalated workflows, compensation steps (reserved stock released, refund kept), cost per run, RAG abstention/cache/latency metrics and the recent questions the policy could not answer (candidates for new golden-set cases).
 
 ## Personas and security
-The sidebar switches between **Customer**, **Operator** and **Manager**. This is a demo stand-in for a real login: put OIDC in front in production. The UI sends the service token plus `X-Customer-Id` / `X-Roles`; the backend services enforce ownership and roles themselves (a customer cannot open someone else's workflow, only a manager can decide an approval), so the UI is not a security boundary.
+The sidebar switches between **Customer**, **Operator** and **Manager**. This is a demo stand-in for user authentication (put an authenticating gateway in front for real use). The UI sends the service token plus `X-Customer-Id` / `X-Roles`; the backend services enforce ownership and roles themselves (a customer cannot open someone else's workflow, only a manager can decide an approval), so the UI is not a security boundary.
 
 ## Deep links
 `?as=manager&wf=WF-123&page=Approvals` opens the app as that persona on that workflow or page (first load only; the URL then follows the selected workflow, so it can be shared). Pages: `Customer request`, `Policy assistant`, `Workflow explorer`, `Approvals`, `Admin`.

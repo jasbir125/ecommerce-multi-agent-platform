@@ -6,7 +6,6 @@ import com.example.policy.PolicyRecords.IngestRequest;
 import com.example.policy.cache.SafeCache;
 import com.example.policy.embedding.EmbeddingService;
 import com.example.policy.ingest.PolicyStore.ChunkRow;
-import com.example.policy.text.InjectionScanner;
 import com.example.policy.text.Tokens;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -57,8 +56,8 @@ public class IngestionPipeline {
     public Result run(IngestRequest req) {
         long t0 = System.nanoTime();
         var blocks = TextExtractor.extract(req.content(), req.contentType());
-        blocks = blocks.stream().map(b -> new TextExtractor.Block(b.heading() == null ? null : TextCleaner.clean(b.heading()),
-                TextCleaner.clean(b.body()))).filter(b -> !b.body().isBlank()).toList();
+        blocks = blocks.stream().map(b -> new TextExtractor.Block(b.heading() == null ? null : TextExtractor.clean(b.heading()),
+                TextExtractor.clean(b.body()))).filter(b -> !b.body().isBlank()).toList();
         if (blocks.isEmpty()) {
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "EMPTY_DOCUMENT", "No readable text found in the document");
         }
@@ -102,7 +101,7 @@ public class IngestionPipeline {
         int idx = 0, flagged = 0, tokens = 0;
         for (var e : byHash.entrySet()) {
             var c = e.getValue();
-            boolean suspicious = InjectionScanner.suspicious(c.content());
+            boolean suspicious = Tokens.suspicious(c.content());
             flagged += suspicious ? 1 : 0;
             tokens += c.tokens();
             rows.add(new ChunkRow(idx++, c.section(), c.content(), e.getKey(), c.tokens(),

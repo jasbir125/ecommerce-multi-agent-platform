@@ -51,7 +51,7 @@ python agent-host/scripts/e2e_demo.py --reject         # manager rejects: nothin
 *Note:* `fastmcp` (MCP servers) and `langchain-mcp-adapters` (this service) need different versions of the `mcp` package, so install them in separate virtualenvs. The Docker images are already separate.
 
 ## RAG (`app/rag`)
-rewrite -> parallel retrieval -> region precedence -> LLM rerank -> budgeted context -> grounded generation -> validation -> answer cache. The policy agent calls it as `ask_policy`; `POST /api/agent/rag/ask` exposes it directly. See `docs/rag-optimization.md` and `docs/hallucination-controls.md`.
+retrieve from policy-service (hybrid search + rerank + cache) -> region precedence -> budgeted context -> grounded generation -> validation (retry, then extractive fallback). The policy agent calls it as `ask_policy`; `POST /api/agent/rag/ask` exposes it directly. See `docs/rag-optimization.md` and `docs/hallucination-controls.md`.
 
 ## Not yet built
 Streamlit (Phase 6); metrics dashboards and the full guardrail datasets (Phase 7); Bedrock deployment (Phase 8).

@@ -1,7 +1,7 @@
 package com.example.inventory;
 
 import com.example.common.security.CallerHolder;
-import com.example.inventory.InventoryRecords.*;
+import com.example.inventory.InventoryService.*;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.util.List;

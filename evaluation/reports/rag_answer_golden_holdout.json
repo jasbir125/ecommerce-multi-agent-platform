@@ -2,17 +2,17 @@
  "metrics": {
   "answerable": 10,
   "unanswerable": 3,
-  "answered_rate": 1.0,
+  "answered_rate": 0.9,
   "source_accuracy": 1.0,
   "fact_recall": 1.0,
   "grounded_rate": 1.0,
   "fabricated_number_answers": 0,
   "extractive_fallback_used": 0,
   "abstention": 1.0,
-  "latency_p50_ms": 2737,
-  "latency_p95_ms": 3527,
-  "avg_tokens": 1136,
-  "avg_cost_usd": 0.0002,
+  "latency_p50_ms": 1017,
+  "latency_p95_ms": 1343,
+  "avg_tokens": 473,
+  "avg_cost_usd": 9e-05,
   "adversarial_pass": 1.0
  },
  "answerable": [
@@ -23,7 +23,7 @@
    "facts_missing": [],
    "grounded": true,
    "fabricated": false,
-   "confidence": 0.853,
+   "confidence": 0.716,
    "answer": "Orders delayed by three (3) or more days beyond the promised delivery date are eligible for a full refund of the order amount. [1]",
    "reason": null,
    "fallback": false
@@ -35,7 +35,7 @@
    "facts_missing": [],
    "grounded": true,
    "fabricated": false,
-   "confidence": 0.803,
+   "confidence": 0.711,
    "answer": "If a shipment shows no carrier scan for five (5) days, it is treated as lost and a carrier exception case must be opened once per shipment. The customer is offe",
    "reason": null,
    "fallback": false
@@ -47,22 +47,24 @@
    "facts_missing": [],
    "grounded": true,
    "fabricated": false,
-   "confidence": 0.851,
+   "confidence": 0.725,
    "answer": "The refund can never exceed the amount paid for the order. [1]",
    "reason": null,
    "fallback": false
   },
   {
    "id": "h-signoff",
-   "answered": true,
-   "source_ok": true,
-   "facts_missing": [],
-   "grounded": true,
+   "answered": false,
+   "source_ok": false,
+   "facts_missing": [
+    "manager"
+   ],
+   "grounded": false,
    "fabricated": false,
-   "confidence": 0.934,
-   "answer": "Every refund must be approved by a manager before it is issued. [1]",
-   "reason": null,
-   "fallback": false
+   "confidence": 0.2,
+   "answer": "I could not verify this from the available policy information. Please contact support.",
+   "reason": "no sufficiently relevant policy found",
+   "fallback": null
   },
   {
    "id": "h-instead",
@@ -71,8 +73,8 @@
    "facts_missing": [],
    "grounded": true,
    "fabricated": false,
-   "confidence": 0.845,
-   "answer": "Customers may choose a replacement of equal or lower price for delayed shipments. [1]",
+   "confidence": 0.738,
+   "answer": "If an order is delayed by three (3) or more days beyond the promised delivery date, the customer may choose a replacement of equal or lower price instead of a f",
    "reason": null,
    "fallback": false
   },
@@ -83,7 +85,7 @@
    "facts_missing": [],
    "grounded": true,
    "fabricated": false,
-   "confidence": 0.862,
+   "confidence": 0.778,
    "answer": "Battery capacity loss below 80 percent within 12 months is covered. [1]",
    "reason": null,
    "fallback": false
@@ -95,8 +97,8 @@
    "facts_missing": [],
    "grounded": true,
    "fabricated": false,
-   "confidence": 0.9,
-   "answer": "A flat return fee of 6 USD is deducted from the refund for unwanted items. [1]",
+   "confidence": 0.751,
+   "answer": "You pay a flat return fee of 6 USD to ship back an unwanted item unless it arrived damaged or defective. [1]",
    "reason": null,
    "fallback": false
   },
@@ -107,7 +109,7 @@
    "facts_missing": [],
    "grounded": true,
    "fabricated": false,
-   "confidence": 0.949,
+   "confidence": 0.936,
    "answer": "Personalised items cannot be returned. [1]",
    "reason": null,
    "fallback": false
@@ -119,7 +121,7 @@
    "facts_missing": [],
    "grounded": true,
    "fabricated": false,
-   "confidence": 0.815,
+   "confidence": 0.769,
    "answer": "Tracking information is refreshed from the carrier every four hours. [1]",
    "reason": null,
    "fallback": false
@@ -131,7 +133,7 @@
    "facts_missing": [],
    "grounded": true,
    "fabricated": false,
-   "confidence": 0.874,
+   "confidence": 0.785,
    "answer": "Accounts with more than three refunds in 90 days are reviewed by the fraud team before a new refund is approved. [1]",
    "reason": null,
    "fallback": false

@@ -1,6 +1,8 @@
 package com.example.audit;
 
-import com.example.audit.AuditRecords.*;
+import java.util.Map;
+import java.time.LocalDateTime;
+import jakarta.validation.constraints.NotBlank;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
@@ -22,7 +24,7 @@ public class AuditService {
     public long append(AuditEventRequest req) {
         String payload;
         try {
-            payload = PiiMasker.mask(mapper.writeValueAsString(req.payload() == null ? java.util.Map.of() : req.payload()));
+            payload = mask(mapper.writeValueAsString(req.payload() == null ? java.util.Map.of() : req.payload()));
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("payload is not serializable", e);
         }
@@ -31,7 +33,7 @@ public class AuditService {
                 VALUES (:wf, :agent, :type, CAST(:payload AS jsonb), :actor, :corr, :cause) RETURNING id""")
                 .param("wf", req.workflowId() == null ? "N/A" : req.workflowId())
                 .param("agent", req.agentName()).param("type", req.eventType()).param("payload", payload)
-                .param("actor", PiiMasker.mask(req.actor())).param("corr", req.correlationId()).param("cause", req.causationId())
+                .param("actor", mask(req.actor())).param("corr", req.correlationId()).param("cause", req.causationId())
                 .query(Long.class).single();
     }
 
@@ -41,5 +43,30 @@ public class AuditService {
                        correlation_id, causation_id, created_at
                 FROM workflow_audit WHERE workflow_id = :wf ORDER BY id""")
                 .param("wf", workflowId).query(AuditEvent.class).list();
+    }
+
+    // ---- masks emails, phone numbers and card-like numbers before anything is stored
+    private static final java.util.regex.Pattern EMAIL = java.util.regex.Pattern.compile("([A-Za-z0-9._%+-])[A-Za-z0-9._%+-]*@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})");
+    private static final java.util.regex.Pattern CARD = java.util.regex.Pattern.compile("\\b(?:\\d[ -]?){13,16}\\b");
+    private static final java.util.regex.Pattern PHONE = java.util.regex.Pattern.compile("(?<!\\d)\\+?\\d[\\d -]{8,}\\d(?!\\d)");
+
+    static String mask(String text) {
+        if (text == null) {
+            return null;
+        }
+        String out = EMAIL.matcher(text).replaceAll("$1***@$2");
+        out = CARD.matcher(out).replaceAll("[CARD-REDACTED]");
+        return PHONE.matcher(out).replaceAll("[PHONE-REDACTED]");
+    }
+
+    // ---- DTOs of this service's API
+
+    public record AuditEventRequest(String workflowId, String agentName, @NotBlank String eventType,
+                                    Map<String, Object> payload, String actor, String correlationId,
+                                    String causationId) {
+    }
+
+    public record AuditEvent(long id, String workflowId, String agentName, String eventType, String payload,
+                             String actor, String correlationId, String causationId, LocalDateTime createdAt) {
     }
 }

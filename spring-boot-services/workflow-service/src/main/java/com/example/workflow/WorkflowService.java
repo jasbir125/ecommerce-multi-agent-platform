@@ -1,12 +1,14 @@
 package com.example.workflow;
 
+import java.util.Map;
+import java.time.LocalDateTime;
+import jakarta.validation.constraints.NotBlank;
 import com.example.common.audit.AuditClient;
 import com.example.common.events.EventPublisher;
 import com.example.common.security.CallerHolder;
 import com.example.common.util.Ids;
 import com.example.common.web.ApiException;
 import com.example.common.web.PlatformRestClient;
-import com.example.workflow.WorkflowRecords.*;
 import java.time.Instant;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
@@ -198,5 +200,18 @@ public class WorkflowService {
         m.put("reason", reason);
         m.put("key", key);
         return m;
+    }
+
+    // ---- DTOs of this service's API
+
+    public record CreateRequest(String customerId, @NotBlank String orderId, @NotBlank String message, String requestId) {
+    }
+
+    public record ResumeRequest(@NotBlank String idempotencyKey, @NotBlank String targetStatus,
+                                Map<String, Object> statePatch, String reason) {
+    }
+
+    public record Workflow(String workflowId, String requestId, String customerId, String orderId, String status,
+                           Map<String, Object> state, long version, LocalDateTime createdAt, LocalDateTime updatedAt) {
     }
 }

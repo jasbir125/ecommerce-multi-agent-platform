@@ -1,6 +1,6 @@
 package com.example.audit;
 
-import com.example.audit.AuditRecords.*;
+import com.example.audit.AuditService.*;
 import com.example.common.security.CallerHolder;
 import jakarta.validation.Valid;
 import java.util.List;

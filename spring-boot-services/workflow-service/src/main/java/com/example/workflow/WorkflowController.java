@@ -1,6 +1,6 @@
 package com.example.workflow;
 
-import com.example.workflow.WorkflowRecords.*;
+import com.example.workflow.WorkflowService.*;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;

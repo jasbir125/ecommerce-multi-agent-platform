@@ -1,6 +1,8 @@
 package com.example.approval;
 
-import com.example.approval.ApprovalRecords.*;
+import java.math.BigDecimal;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
 import com.example.common.audit.AuditClient;
 import com.example.common.events.EventPublisher;
 import com.example.common.security.CallerHolder;
@@ -110,5 +112,20 @@ public class ApprovalService {
         events.publish("workflow.approval.decided", id, "ApprovalDecided", current.workflowId(), null, payload);
         audit.record(current.workflowId(), "approval-service", "APPROVAL_" + decision, req.decidedBy(), payload);
         return get(id);
+    }
+
+    // ---- DTOs of this service's API
+
+    public record Approval(String approvalId, String workflowId, String status, String requestedAction,
+                           BigDecimal amount, String reason, String riskLevel, String decidedBy,
+                           LocalDateTime decidedAt, LocalDateTime expiresAt, LocalDateTime createdAt) {
+    }
+
+    public record CreateRequest(@NotBlank String workflowId, @NotBlank String requestedAction,
+                                BigDecimal amount, String reason, String riskLevel) {
+    }
+
+    /** decision must be APPROVED or REJECTED. */
+    public record DecisionRequest(@NotNull String decision, @NotBlank String decidedBy, String comment) {
     }
 }

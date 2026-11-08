@@ -1,6 +1,6 @@
 package com.example.approval;
 
-import com.example.approval.ApprovalRecords.*;
+import com.example.approval.ApprovalService.*;
 import com.example.common.security.CallerHolder;
 import jakarta.validation.Valid;
 import java.util.List;

@@ -29,4 +29,21 @@ class TextExtractorTest {
         assertThat(b.get(0).heading()).isEqualTo("Delays");
         assertThat(b.get(0).body()).contains("Three days late.").contains("Or lost.").doesNotContain("alert").doesNotContain("menu");
     }
+
+    @Test
+    void normalisesQuotesSpacesHyphenationAndEmphasis() {
+        String raw = "The \u201Cdeliv-\nery\u201D   was **late**.\u200B\n\n\n\nNext\u00A0paragraph";
+        String out = TextExtractor.clean(raw);
+        assertThat(out).isEqualTo("The \"delivery\" was late.\n\nNext paragraph");
+    }
+
+    @Test
+    void identicalContentCleansIdentically() {
+        assertThat(TextExtractor.clean("  a  b \n")).isEqualTo(TextExtractor.clean("a b"));
+    }
+
+    @Test
+    void nullIsEmpty() {
+        assertThat(TextExtractor.clean(null)).isEmpty();
+    }
 }

@@ -1,12 +1,12 @@
 package com.example.shipment;
 
+import java.time.LocalDate;
 import com.example.common.audit.AuditClient;
 import com.example.common.events.EventPublisher;
 import com.example.common.security.CallerHolder;
 import com.example.common.util.Ids;
 import com.example.common.web.ApiException;
 import com.example.shipment.CarrierGateway.Row;
-import com.example.shipment.ShipmentRecords.*;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -79,5 +79,18 @@ public class ShipmentService {
             throw new ApiException(HttpStatus.FORBIDDEN, "NOT_ORDER_OWNER", "You do not have access to this shipment");
         }
         return r;
+    }
+
+    // ---- DTOs of this service's API
+
+    /** exceptionType is derived by us from carrier data: NONE, DELAYED or LOST. */
+    public record Shipment(String orderId, String customerId, String carrier, String trackingNo, String status,
+                           LocalDate expectedDelivery, int delayDays, String lastEvent, String exceptionType) {
+    }
+
+    public record CarrierCase(String caseId, String orderId, String workflowId, String reason, boolean created) {
+    }
+
+    public record CarrierCaseRequest(String workflowId, String reason) {
     }
 }

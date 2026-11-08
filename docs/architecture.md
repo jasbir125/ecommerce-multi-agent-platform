@@ -31,7 +31,7 @@ Agent host -> `ecommerce-mcp-server` (8090) / `policy-mcp-server` (8091) -> Spri
 LangGraph supervisor workflow with specialist ReAct agents (read-only tools), a Postgres checkpointer, human approval via `interrupt`, deterministic execution with compensation, and Kafka/HTTP triggers. See `agent-host/README.md`.
 
 ## RAG (Phase 5)
-policy-service owns ingestion, embeddings, hybrid retrieval, reranking, caching and the deterministic eligibility check; agent-host `app/rag` adds query rewriting, model reranking, grounded generation and the grounding validator. See `docs/rag-optimization.md`.
+policy-service owns ingestion, embeddings, hybrid retrieval, reranking, caching and the deterministic eligibility check; agent-host `app/rag` adds context building, grounded generation and the grounding validator. See `docs/rag-optimization.md`.
 
 ## UI (Phase 6)
 Streamlit calls workflow-service (workflows, trace, event feed), approval-service (decisions), the agent host (live SSE runs, run state, RAG, admin metrics) and audit-service. See `streamlit-ui/README.md`.

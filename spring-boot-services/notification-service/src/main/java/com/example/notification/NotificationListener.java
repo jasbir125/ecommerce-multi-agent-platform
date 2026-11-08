@@ -3,7 +3,7 @@ package com.example.notification;
 import com.example.common.events.EventEnvelope;
 import com.example.common.events.EventLog;
 import com.example.common.events.InboxGuard;
-import com.example.notification.NotificationRecords.CustomerNotification;
+import com.example.notification.NotificationService.CustomerNotification;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import org.springframework.kafka.annotation.KafkaListener;
