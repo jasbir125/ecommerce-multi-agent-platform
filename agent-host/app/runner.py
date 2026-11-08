@@ -45,6 +45,7 @@ class RunManager:
         self.s, self.deps, self.graph, self.redis = settings, deps, graph, redis
         self._local_locks: set[str] = set()
         self.limiter = RunRateLimiter(settings.runs_per_minute_per_customer)
+        self.ask_limiter = RunRateLimiter(settings.rag_ask_per_minute)
 
     # ------------------------------------------------------------------ locking
     async def _acquire(self, key: str, ttl: int = 900) -> bool:

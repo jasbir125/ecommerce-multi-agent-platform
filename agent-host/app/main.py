@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:  # noqa: BLE001
             log.warning("Redis unavailable (%s); using process-local locks", e)
             redis = None
-        deps = Deps(settings, ModelFactory(settings), WorkflowClient(settings), RunEvaluator(settings.database_url))
+        deps = Deps(settings, ModelFactory(settings), WorkflowClient(settings), RunEvaluator(settings.database_url), redis=redis)
         graph = build_graph(await make_checkpointer(stack, settings))
         runner = RunManager(settings, deps, graph, redis)
         app.state.settings, app.state.runner = settings, runner

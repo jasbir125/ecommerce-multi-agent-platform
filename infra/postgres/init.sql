@@ -65,37 +65,83 @@ CREATE INDEX idx_approval_workflow ON approval_request (workflow_id);
 CREATE INDEX idx_approval_status   ON approval_request (status);
 
 -- ------------------------------------------------------------- policy / RAG
+-- A policy document is versioned; retrieval only sees ACTIVE documents that are in force
+-- for the requested date. Filter columns live here so every chunk inherits them.
 CREATE TABLE policy_document (
-    id             BIGSERIAL PRIMARY KEY,
-    policy_key     VARCHAR(200),
-    version        VARCHAR(50),
-    title          VARCHAR(500),
-    content        TEXT,
-    content_hash   VARCHAR(64),                              -- dedup / incremental updates
-    effective_from DATE,
-    effective_to   DATE,
-    region         VARCHAR(10),
-    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    id               BIGSERIAL PRIMARY KEY,
+    policy_key       VARCHAR(200),
+    version          VARCHAR(50),
+    title            VARCHAR(500),
+    content          TEXT,
+    content_hash     VARCHAR(64),                            -- dedup / incremental updates
+    policy_type      VARCHAR(50)  NOT NULL DEFAULT 'general', -- refund, shipping, replacement...
+    tenant_id        VARCHAR(50)  NOT NULL DEFAULT 'default',
+    customer_segment VARCHAR(50)  NOT NULL DEFAULT 'ALL',
+    product_category VARCHAR(100) NOT NULL DEFAULT 'ALL',
+    language         VARCHAR(10)  NOT NULL DEFAULT 'en',
+    source_uri       VARCHAR(500),
+    status           VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE'
+                     CHECK (status IN ('DRAFT','ACTIVE','ARCHIVED')),
+    effective_from   DATE,
+    effective_to     DATE,
+    region           VARCHAR(10),
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (policy_key, version)
 );
+CREATE INDEX idx_policy_doc_filters ON policy_document (status, tenant_id, policy_type, region);
 
 CREATE TABLE policy_chunk (
     id                 BIGSERIAL PRIMARY KEY,
     policy_document_id BIGINT REFERENCES policy_document(id),
     chunk_index        INT   NOT NULL,
+    section            VARCHAR(300),                         -- heading the chunk sits under
     content            TEXT  NOT NULL,
-    metadata           JSONB NOT NULL,                       -- type, region, tenant, segment...
+    content_hash       VARCHAR(64) NOT NULL,                 -- lets an unchanged chunk reuse its embedding
+    token_count        INT,
+    metadata           JSONB NOT NULL,                       -- keywords, injectionSuspected, ...
+    embedding_model    VARCHAR(100),                         -- vectors from different models are not comparable
     embedding          VECTOR(1536),
     -- Generated tsvector powers the keyword half of hybrid retrieval.
     content_tsv        TSVECTOR GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
-    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (policy_document_id, chunk_index)
 );
 
 -- HNSW index: approximate nearest-neighbour search on cosine distance.
 CREATE INDEX idx_policy_chunk_embedding
-    ON policy_chunk USING hnsw (embedding vector_cosine_ops);
+    ON policy_chunk USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);
 CREATE INDEX idx_policy_chunk_tsv      ON policy_chunk USING gin (content_tsv);
 CREATE INDEX idx_policy_chunk_document ON policy_chunk (policy_document_id);
+CREATE INDEX idx_policy_chunk_reuse    ON policy_chunk (content_hash, embedding_model);
+
+-- Async ingestion jobs (one row per request, updated as the pipeline runs).
+CREATE TABLE ingestion_job (
+    job_id       VARCHAR(40) PRIMARY KEY,
+    policy_key   VARCHAR(200) NOT NULL,
+    version      VARCHAR(50)  NOT NULL,
+    status       VARCHAR(20)  NOT NULL DEFAULT 'QUEUED'
+                 CHECK (status IN ('QUEUED','RUNNING','DONE','UNCHANGED','FAILED')),
+    stats        JSONB,
+    error        TEXT,
+    document_id  BIGINT,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    finished_at  TIMESTAMP
+);
+
+-- One row per retrieval, for quality and latency monitoring (no raw customer text: query is stored as a hash + a short preview).
+CREATE TABLE rag_query_log (
+    id               BIGSERIAL PRIMARY KEY,
+    query_hash       VARCHAR(64) NOT NULL,
+    query_preview    VARCHAR(120),
+    latency_ms       INT,
+    cache_hit        BOOLEAN,
+    degraded         BOOLEAN,
+    confidence       NUMERIC(4,3),
+    insufficient     BOOLEAN,
+    result_chunk_ids BIGINT[],
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_rag_query_log_time ON rag_query_log (created_at);
 
 -- ---------------------------------------------------------- domain snapshots
 -- Point-in-time copies of what the agents saw, kept for audit and evaluation.

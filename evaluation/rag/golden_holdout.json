@@ -1,0 +1,240 @@
+{
+ "description": "Held-out questions written after tuning; never used to adjust thresholds or weights.",
+ "cases": [
+  {
+   "id": "h-overdue",
+   "category": "holdout",
+   "query": "I was told my order is 4 days overdue, am I owed my money back?",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "refund-policy",
+      "section": "Delayed shipments"
+     }
+    ],
+    "facts": [
+     "full refund"
+    ]
+   }
+  },
+  {
+   "id": "h-carrier-loses",
+   "category": "holdout",
+   "query": "What does the company do if the carrier loses my parcel?",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "shipping-delay-policy",
+      "section": "Lost shipments"
+     },
+     {
+      "policyKey": "refund-policy",
+      "section": "Lost shipments"
+     },
+     {
+      "policyKey": "shipping-delay-policy",
+      "section": "What customers are offered"
+     }
+    ],
+    "facts": [
+     "refund"
+    ]
+   }
+  },
+  {
+   "id": "h-cap",
+   "category": "holdout",
+   "query": "Is there a cap on what I can be refunded?",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "refund-policy",
+      "section": "Refund amount"
+     }
+    ],
+    "facts": [
+     "exceed the amount paid"
+    ]
+   }
+  },
+  {
+   "id": "h-signoff",
+   "category": "holdout",
+   "query": "Who has to sign off before money goes back to a customer?",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "refund-policy",
+      "section": "Approval"
+     }
+    ],
+    "facts": [
+     "manager"
+    ]
+   }
+  },
+  {
+   "id": "h-instead",
+   "category": "holdout",
+   "query": "Can I get a different product instead of a refund if mine is late?",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "refund-policy",
+      "section": "Delayed shipments"
+     },
+     {
+      "policyKey": "shipping-delay-policy",
+      "section": "What customers are offered"
+     },
+     {
+      "policyKey": "price-protection-policy",
+      "section": "Replacement price"
+     }
+    ],
+    "facts": [
+     "replacement"
+    ]
+   }
+  },
+  {
+   "id": "h-battery",
+   "category": "holdout",
+   "query": "What if my battery loses charge capacity after 8 months?",
+   "filters": {
+    "productCategory": "electronics"
+   },
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "warranty-policy",
+      "section": "What is covered"
+     },
+     {
+      "policyKey": "warranty-policy",
+      "section": "Coverage period"
+     }
+    ],
+    "facts": [
+     "80 percent"
+    ]
+   }
+  },
+  {
+   "id": "h-ship-back",
+   "category": "holdout",
+   "query": "Do I pay anything to ship back an unwanted item?",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "returns-policy",
+      "section": "Return shipping"
+     }
+    ],
+    "facts": [
+     "6 USD"
+    ]
+   }
+  },
+  {
+   "id": "h-personalised",
+   "category": "holdout",
+   "query": "Are personalised items returnable?",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "returns-policy",
+      "section": "Non-returnable items"
+     }
+    ],
+    "facts": [
+     "personalised"
+    ]
+   }
+  },
+  {
+   "id": "h-feed",
+   "category": "holdout",
+   "query": "How frequently does the carrier feed refresh?",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "shipping-delay-policy",
+      "section": "Tracking updates"
+     }
+    ],
+    "facts": [
+     "four hours"
+    ]
+   }
+  },
+  {
+   "id": "h-scrutiny",
+   "category": "holdout",
+   "query": "Does an account that refunded four times this quarter get extra scrutiny?",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "payment-fraud-policy",
+      "section": "Fraud review"
+     }
+    ],
+    "facts": [
+     "three refunds"
+    ]
+   }
+  },
+  {
+   "id": "h-address",
+   "category": "holdout",
+   "query": "Can I change the delivery address after ordering?",
+   "filters": {},
+   "answerable": false,
+   "expect": {
+    "any_of": [],
+    "facts": []
+   }
+  },
+  {
+   "id": "h-antarctica",
+   "category": "holdout",
+   "query": "Do you ship to Antarctica?",
+   "filters": {},
+   "answerable": false,
+   "expect": {
+    "any_of": [],
+    "facts": []
+   }
+  },
+  {
+   "id": "h-ceo",
+   "category": "holdout",
+   "query": "What is the CEO's phone number?",
+   "filters": {},
+   "answerable": false,
+   "expect": {
+    "any_of": [],
+    "facts": []
+   }
+  }
+ ]
+}

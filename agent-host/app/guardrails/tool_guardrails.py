@@ -11,7 +11,7 @@ from langchain_core.tools import BaseTool, StructuredTool
 AGENT_TOOLS: dict[str, set[str]] = {
     "order": {"get_order_status", "get_payment_status"},
     "shipment": {"get_shipment_status"},
-    "policy": {"search_policy", "get_policy_version", "validate_refund_eligibility"},
+    "policy": {"ask_policy", "get_policy_version"},   # eligibility is decided by code, not by a model-chosen tool call
     "product": {"search_products", "check_inventory"},
 }
 WRITE_TOOLS = {"create_approval_request", "initiate_refund", "reserve_inventory", "release_inventory",

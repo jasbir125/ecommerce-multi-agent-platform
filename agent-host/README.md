@@ -43,12 +43,15 @@ State is checkpointed in Postgres (`CHECKPOINTER=postgres`, falls back to memory
 ```bash
 uv venv --python 3.12 .venv && source .venv/bin/activate
 uv pip install -r agent-host/requirements-dev.txt     # use a separate venv from the MCP servers (see note)
-cd agent-host && python -m pytest -q                   # 40 tests, no network or model needed
+cd agent-host && python -m pytest -q                   # 101 tests, no network or model needed
 PYTHONPATH=. uvicorn app.main:app --reload --port 8092
 python agent-host/scripts/e2e_demo.py                  # live scenario, needs the stack and a model key
 python agent-host/scripts/e2e_demo.py --reject         # manager rejects: nothing is executed
 ```
 *Note:* `fastmcp` (MCP servers) and `langchain-mcp-adapters` (this service) need different versions of the `mcp` package, so install them in separate virtualenvs. The Docker images are already separate.
 
+## RAG (`app/rag`)
+rewrite -> parallel retrieval -> region precedence -> LLM rerank -> budgeted context -> grounded generation -> validation -> answer cache. The policy agent calls it as `ask_policy`; `POST /api/agent/rag/ask` exposes it directly. See `docs/rag-optimization.md` and `docs/hallucination-controls.md`.
+
 ## Not yet built
-RAG internals (`app/rag`: query rewriting, reranking, caching, grounding validator) arrive in Phase 5; Streamlit in Phase 6; metrics dashboards and full guardrail test datasets in Phase 7.
+Streamlit (Phase 6); metrics dashboards and the full guardrail datasets (Phase 7); Bedrock deployment (Phase 8).

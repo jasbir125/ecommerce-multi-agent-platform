@@ -1,5 +1,5 @@
 # Convenience targets. Run `make help` for the list.
-.PHONY: help env infra up down logs ps topics psql build-java run-agent test-agent run-mcp test-mcp run-ui clean
+.PHONY: eval-rag eval-rag-holdout help env infra up down logs ps topics psql build-java run-agent test-agent run-mcp test-mcp run-ui clean
 
 help:        ## Show this help
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -49,3 +49,13 @@ test-mcp:    ## Run MCP server tests
 
 run-ui:      ## Run Streamlit locally
 	cd streamlit-ui && streamlit run app.py
+
+PY ?= python3   # needs httpx, e.g. make eval-rag PY=.venv-agent/bin/python
+
+eval-rag:    ## RAG quality: retrieval + answers + ingestion lifecycle (stack running, model key set)
+	$(PY) evaluation/rag/run_retrieval_eval.py
+	$(PY) evaluation/rag/run_answer_eval.py
+	$(PY) evaluation/rag/ingestion_lifecycle_check.py
+
+eval-rag-holdout: ## RAG quality on unseen questions (informational)
+	$(PY) evaluation/rag/run_answer_eval.py --set golden_holdout --no-poison

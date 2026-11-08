@@ -1,0 +1,244 @@
+{
+ "metrics": {
+  "cases": 13,
+  "answerable": 10,
+  "unanswerable": 3,
+  "mode": "hybrid",
+  "k": 3,
+  "hit@1": 0.9,
+  "hit@3": 0.9,
+  "mrr": 0.9,
+  "fact_recall": 0.9,
+  "false_abstain": 0.1,
+  "abstention": 0.6666666666666666,
+  "latency_p50_ms": 610,
+  "latency_p95_ms": 821,
+  "hit@6": 0.9,
+  "cached_latency_p50_ms": 1,
+  "raw_conf_answerable_min": 0.42,
+  "raw_conf_unanswerable_max": 0.51,
+  "best_threshold_on_this_set": 0.42
+ },
+ "rows": [
+  {
+   "raw": 0.432,
+   "id": "h-overdue",
+   "category": "holdout",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.432,
+   "latency_ms": 1261,
+   "top": [
+    "refund-policy/Delayed shipments",
+    "refund-policy/Refund method and timing",
+    "refund-policy/Refund amount"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "full refund"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.421,
+   "id": "h-carrier-loses",
+   "category": "holdout",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.421,
+   "latency_ms": 821,
+   "top": [
+    "shipping-delay-policy/Lost shipments",
+    "refund-policy/Lost shipments",
+    "refund-policy/Refund amount"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "refund"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.45,
+   "id": "h-cap",
+   "category": "holdout",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.45,
+   "latency_ms": 589,
+   "top": [
+    "refund-policy/Refund amount",
+    "refund-policy/Approval",
+    "payment-fraud-policy/Fraud review"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "exceed the amount paid"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.337,
+   "id": "h-signoff",
+   "category": "holdout",
+   "answerable": true,
+   "abstained": true,
+   "confidence": 0.2,
+   "latency_ms": 650,
+   "top": [],
+   "rank": null,
+   "facts_found": [],
+   "facts_missing": [
+    "manager"
+   ]
+  },
+  {
+   "raw": 0.475,
+   "id": "h-instead",
+   "category": "holdout",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.475,
+   "latency_ms": 591,
+   "top": [
+    "refund-policy/Delayed shipments",
+    "price-protection-policy/Similar products",
+    "shipping-delay-policy/What customers are offered"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "replacement"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.555,
+   "id": "h-battery",
+   "category": "holdout",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.555,
+   "latency_ms": 610,
+   "top": [
+    "warranty-policy/What is covered",
+    "warranty-policy/Coverage period",
+    "cancellation-policy/Before shipment"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "80 percent"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.502,
+   "id": "h-ship-back",
+   "category": "holdout",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.502,
+   "latency_ms": 600,
+   "top": [
+    "returns-policy/Return shipping",
+    "cancellation-policy/After shipment",
+    "refund-policy/Refund amount"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "6 USD"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.872,
+   "id": "h-personalised",
+   "category": "holdout",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.872,
+   "latency_ms": 598,
+   "top": [
+    "returns-policy/Non-returnable items",
+    "returns-policy/Return window",
+    "returns-policy/Inspection"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "personalised"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.538,
+   "id": "h-feed",
+   "category": "holdout",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.538,
+   "latency_ms": 689,
+   "top": [
+    "shipping-delay-policy/Tracking updates",
+    "shipping-delay-policy/Lost shipments",
+    "refund-policy/Lost shipments"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "four hours"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.571,
+   "id": "h-scrutiny",
+   "category": "holdout",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.571,
+   "latency_ms": 641,
+   "top": [
+    "payment-fraud-policy/Fraud review",
+    "refund-policy/Approval",
+    "payment-fraud-policy/Identity"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "three refunds"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.512,
+   "id": "h-address",
+   "category": "holdout",
+   "answerable": false,
+   "abstained": false,
+   "confidence": 0.512,
+   "latency_ms": 581,
+   "top": [
+    "cancellation-policy/After shipment",
+    "refund-policy/Delayed shipments",
+    "refund-policy/Shipped orders"
+   ]
+  },
+  {
+   "raw": 0.085,
+   "id": "h-antarctica",
+   "category": "holdout",
+   "answerable": false,
+   "abstained": true,
+   "confidence": 0.085,
+   "latency_ms": 593,
+   "top": []
+  },
+  {
+   "raw": 0.195,
+   "id": "h-ceo",
+   "category": "holdout",
+   "answerable": false,
+   "abstained": true,
+   "confidence": 0.195,
+   "latency_ms": 640,
+   "top": []
+  }
+ ]
+}

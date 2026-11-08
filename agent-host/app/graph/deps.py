@@ -11,6 +11,7 @@ from app.evaluation.evaluator import RunEvaluator
 from app.guardrails.tool_guardrails import ToolPolicy
 from app.llm import ModelFactory, UsageTracker
 from app.mcp.client import McpGateway
+from app.rag.retriever import CircuitBreaker
 from app.models.workflow_state import WorkflowState
 from app.services.workflow_client import WorkflowClient
 
@@ -30,6 +31,8 @@ class Deps:
     models: ModelFactory
     workflows: WorkflowClient
     evaluator: RunEvaluator | None = None
+    redis: Any = None
+    search_breaker: CircuitBreaker = field(default_factory=CircuitBreaker)   # shared by all runs: one outage trips it for everyone
     runs: dict[str, RunContext] = field(default_factory=dict)
 
     def ensure(self, workflow_id: str, customer_id: str, order_id: str) -> RunContext:

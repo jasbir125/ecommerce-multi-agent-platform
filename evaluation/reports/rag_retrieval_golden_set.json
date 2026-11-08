@@ -1,0 +1,728 @@
+{
+ "metrics": {
+  "cases": 42,
+  "answerable": 32,
+  "unanswerable": 10,
+  "mode": "hybrid",
+  "k": 3,
+  "hit@1": 0.875,
+  "hit@3": 0.90625,
+  "mrr": 0.890625,
+  "fact_recall": 0.9375,
+  "false_abstain": 0.03125,
+  "abstention": 1.0,
+  "latency_p50_ms": 7,
+  "latency_p95_ms": 8,
+  "hit@6": 0.96875,
+  "cached_latency_p50_ms": 1,
+  "raw_conf_answerable_min": 0.36,
+  "raw_conf_unanswerable_max": 0.34,
+  "best_threshold_on_this_set": 0.36
+ },
+ "rows": [
+  {
+   "raw": 0.818,
+   "id": "delay-exact",
+   "category": "exact",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.818,
+   "latency_ms": 19,
+   "top": [
+    "refund-policy/Delayed shipments",
+    "shipping-delay-policy/When a shipment counts as delayed",
+    "cancellation-policy/After shipment"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "three (3)"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.42,
+   "id": "delay-chatty",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.42,
+   "latency_ms": 11,
+   "top": [
+    "refund-policy/Refund method and timing",
+    "refund-policy/Lost shipments",
+    "shipping-delay-policy/Lost shipments"
+   ],
+   "rank": null,
+   "facts_found": [
+    "full refund"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.332,
+   "id": "lost-paraphrase",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": true,
+   "confidence": 0.2,
+   "latency_ms": 9,
+   "top": [],
+   "rank": null,
+   "facts_found": [],
+   "facts_missing": [
+    "five (5) days"
+   ]
+  },
+  {
+   "raw": 1.0,
+   "id": "lost-define",
+   "category": "exact",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 1.0,
+   "latency_ms": 4,
+   "top": [
+    "refund-policy/Lost shipments",
+    "shipping-delay-policy/Lost shipments",
+    "cancellation-policy/After shipment"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "no scan"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.448,
+   "id": "refund-timing",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.448,
+   "latency_ms": 8,
+   "top": [
+    "refund-policy/Refund method and timing",
+    "payment-fraud-policy/Refund destination",
+    "refund-policy/Approval"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "5 to 7 business days"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.59,
+   "id": "refund-senior",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.59,
+   "latency_ms": 3,
+   "top": [
+    "refund-policy/Approval",
+    "payment-fraud-policy/Fraud review",
+    "payment-fraud-policy/Identity"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "senior manager"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.449,
+   "id": "approval-expiry",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.449,
+   "latency_ms": 8,
+   "top": [
+    "refund-policy/Approval",
+    "payment-fraud-policy/Fraud review",
+    "warranty-policy/Claims"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "30 minutes"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.95,
+   "id": "cancel-shipped",
+   "category": "exact",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.95,
+   "latency_ms": 8,
+   "top": [
+    "refund-policy/Shipped orders",
+    "cancellation-policy/Partially shipped orders",
+    "cancellation-policy/After shipment"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "cannot be cancelled"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.584,
+   "id": "cancel-before",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.584,
+   "latency_ms": 7,
+   "top": [
+    "cancellation-policy/Before shipment",
+    "refund-policy/Shipped orders",
+    "cancellation-policy/After shipment"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "free of charge"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.712,
+   "id": "replace-price",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.712,
+   "latency_ms": 7,
+   "top": [
+    "price-protection-policy/Replacement price",
+    "price-protection-policy/Similar products",
+    "price-protection-policy/Stock"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "same or less"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.915,
+   "id": "replace-stock",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.915,
+   "latency_ms": 3,
+   "top": [
+    "price-protection-policy/Stock",
+    "price-protection-policy/Replacement price",
+    "customer-support-sla/Notifications"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "released"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.54,
+   "id": "price-drop",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.54,
+   "latency_ms": 7,
+   "top": [
+    "price-protection-policy/Price drops",
+    "price-protection-policy/Replacement price",
+    "refund-policy/Delayed shipments"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "14 days"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.52,
+   "id": "return-window",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.52,
+   "latency_ms": 7,
+   "top": [
+    "returns-policy/Return window",
+    "returns-policy/Inspection",
+    "returns-policy/Return shipping"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "30 days"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.563,
+   "id": "return-ship",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.563,
+   "latency_ms": 7,
+   "top": [
+    "returns-policy/Return shipping",
+    "cancellation-policy/After shipment",
+    "returns-policy/Return window"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "free"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.691,
+   "id": "return-gift",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.691,
+   "latency_ms": 7,
+   "top": [
+    "returns-policy/Non-returnable items",
+    "returns-policy/Return window",
+    "returns-policy/Return shipping"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "Gift cards"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.889,
+   "id": "eu-withdraw",
+   "category": "filter",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.889,
+   "latency_ms": 8,
+   "top": [
+    "returns-policy-eu/Cooling-off period",
+    "returns-policy-eu/Refund timing",
+    "price-protection-policy/Price drops"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "14 days"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.608,
+   "id": "eu-vs-global",
+   "category": "filter",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.608,
+   "latency_ms": 8,
+   "top": [
+    "returns-policy-eu/Return costs",
+    "returns-policy/Return window",
+    "returns-policy/Inspection"
+   ],
+   "rank": null,
+   "facts_found": [],
+   "facts_missing": [
+    "14 days"
+   ]
+  },
+  {
+   "raw": 0.774,
+   "id": "warranty-length",
+   "category": "filter",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.774,
+   "latency_ms": 3,
+   "top": [
+    "warranty-policy/Coverage period",
+    "warranty-policy/What is covered",
+    "warranty-policy/Claims"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "12 month"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.683,
+   "id": "warranty-water",
+   "category": "filter",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.683,
+   "latency_ms": 3,
+   "top": [
+    "warranty-policy/What is not covered",
+    "warranty-policy/What is covered",
+    "warranty-policy/Claims"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "Water damage"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.775,
+   "id": "refund-dest",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.775,
+   "latency_ms": 3,
+   "top": [
+    "payment-fraud-policy/Refund destination",
+    "refund-policy/Refund amount",
+    "refund-policy/Refund method and timing"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "original payment method"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.875,
+   "id": "fraud-review",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.875,
+   "latency_ms": 7,
+   "top": [
+    "payment-fraud-policy/Fraud review",
+    "refund-policy/Approval",
+    "payment-fraud-policy/Identity"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "three refunds in 90 days"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.363,
+   "id": "chargeback",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.363,
+   "latency_ms": 8,
+   "top": [
+    "payment-fraud-policy/Chargebacks",
+    "refund-policy/Shipped orders",
+    "cancellation-policy/Before shipment"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "chargeback"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.83,
+   "id": "support-sla",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.83,
+   "latency_ms": 3,
+   "top": [
+    "customer-support-sla/Escalations",
+    "refund-policy/Approval",
+    "shipping-delay-policy/What customers are offered"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "one business day"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.842,
+   "id": "phone-hours",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.842,
+   "latency_ms": 3,
+   "top": [
+    "customer-support-sla/Phone support",
+    "shipping-delay-policy/Tracking updates",
+    "payment-fraud-policy/Identity"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "9:00"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.881,
+   "id": "tracking-refresh",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.881,
+   "latency_ms": 2,
+   "top": [
+    "shipping-delay-policy/Tracking updates",
+    "shipping-delay-policy/When a shipment counts as delayed",
+    "customer-support-sla/Notifications"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "four hours"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.639,
+   "id": "weather",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.639,
+   "latency_ms": 2,
+   "top": [
+    "shipping-delay-policy/When a shipment counts as delayed",
+    "refund-policy/Delayed shipments",
+    "shipping-delay-policy/What customers are offered"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "weather"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.64,
+   "id": "ship-fee",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.64,
+   "latency_ms": 2,
+   "top": [
+    "returns-policy/Return shipping",
+    "refund-policy/Refund amount",
+    "refund-policy/Shipped orders"
+   ],
+   "rank": 2,
+   "facts_found": [
+    "Shipping fees"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.812,
+   "id": "offered",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.812,
+   "latency_ms": 7,
+   "top": [
+    "shipping-delay-policy/What customers are offered",
+    "shipping-delay-policy/Lost shipments",
+    "cancellation-policy/After shipment"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "refund"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.829,
+   "id": "identity",
+   "category": "paraphrase",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.829,
+   "latency_ms": 7,
+   "top": [
+    "payment-fraud-policy/Identity",
+    "refund-policy/Shipped orders",
+    "refund-policy/Refund amount"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "owns the order"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.939,
+   "id": "version-pin",
+   "category": "version",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.939,
+   "latency_ms": 3,
+   "top": [
+    "refund-policy/Eligibility",
+    "refund-policy/Refund method",
+    "refund-policy/Delayed shipments"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "7 days"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.939,
+   "id": "version-asof",
+   "category": "version",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.939,
+   "latency_ms": 2,
+   "top": [
+    "refund-policy/Delayed shipments",
+    "refund-policy/Eligibility",
+    "refund-policy/Refund method"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "Delayed shipments are not covered by this legacy policy"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.8,
+   "id": "version-current",
+   "category": "version",
+   "answerable": true,
+   "abstained": false,
+   "confidence": 0.8,
+   "latency_ms": 3,
+   "top": [
+    "refund-policy/Delayed shipments",
+    "shipping-delay-policy/What customers are offered",
+    "cancellation-policy/After shipment"
+   ],
+   "rank": 1,
+   "facts_found": [
+    "full refund"
+   ],
+   "facts_missing": []
+  },
+  {
+   "raw": 0.05,
+   "id": "oos-france",
+   "category": "out_of_scope",
+   "answerable": false,
+   "abstained": true,
+   "confidence": 0.05,
+   "latency_ms": 3,
+   "top": []
+  },
+  {
+   "raw": 0.338,
+   "id": "oos-pricematch",
+   "category": "out_of_scope",
+   "answerable": false,
+   "abstained": true,
+   "confidence": 0.2,
+   "latency_ms": 2,
+   "top": []
+  },
+  {
+   "raw": 0.05,
+   "id": "oos-crypto",
+   "category": "out_of_scope",
+   "answerable": false,
+   "abstained": true,
+   "confidence": 0.05,
+   "latency_ms": 2,
+   "top": []
+  },
+  {
+   "raw": 0.155,
+   "id": "oos-sunday",
+   "category": "out_of_scope",
+   "answerable": false,
+   "abstained": true,
+   "confidence": 0.155,
+   "latency_ms": 6,
+   "top": []
+  },
+  {
+   "raw": 0.191,
+   "id": "oos-giftwrap",
+   "category": "out_of_scope",
+   "answerable": false,
+   "abstained": true,
+   "confidence": 0.191,
+   "latency_ms": 2,
+   "top": []
+  },
+  {
+   "raw": 0.05,
+   "id": "oos-password",
+   "category": "out_of_scope",
+   "answerable": false,
+   "abstained": true,
+   "confidence": 0.05,
+   "latency_ms": 2,
+   "top": []
+  },
+  {
+   "raw": 0.05,
+   "id": "oos-joke",
+   "category": "out_of_scope",
+   "answerable": false,
+   "abstained": true,
+   "confidence": 0.05,
+   "latency_ms": 7,
+   "top": []
+  },
+  {
+   "raw": 0.305,
+   "id": "oos-toaster",
+   "category": "out_of_scope",
+   "answerable": false,
+   "abstained": true,
+   "confidence": 0.2,
+   "latency_ms": 7,
+   "top": []
+  },
+  {
+   "raw": 0.05,
+   "id": "oos-visa",
+   "category": "out_of_scope",
+   "answerable": false,
+   "abstained": true,
+   "confidence": 0.05,
+   "latency_ms": 7,
+   "top": []
+  },
+  {
+   "raw": 0.05,
+   "id": "oos-recipe",
+   "category": "out_of_scope",
+   "answerable": false,
+   "abstained": true,
+   "confidence": 0.05,
+   "latency_ms": 7,
+   "top": []
+  }
+ ]
+}

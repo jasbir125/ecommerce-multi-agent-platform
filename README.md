@@ -4,7 +4,7 @@ An enterprise-grade Multi-Agent Ecommerce Order Recovery Platform. Demo workflow
 
 > **Core rule:** the model can suggest an action, but only authorized application code and domain services can execute it.
 
-**Status: Phase 4 complete.** Infrastructure, the nine Spring Boot services, the two FastMCP servers and the LangGraph agent host are implemented and tested end to end. Only the Streamlit UI is still a placeholder (Phase 6), and the deeper RAG work is Phase 5.
+**Status: Phase 5 complete.** Infrastructure, the nine Spring Boot services, the two FastMCP servers, the LangGraph agent host and a production-grade policy RAG are implemented and tested end to end. Only the Streamlit UI is still a placeholder (Phase 6).
 
 ## Layout
 
@@ -125,7 +125,7 @@ Full 17-step script: `docs/demo-script.md` (filled in Phase 7). Scenarios and go
 2. **Phase 2** — Spring Boot services (Spring AI, REST, Kafka, DB, OpenTelemetry) ✅
 3. **Phase 3** — FastMCP ecommerce + policy servers ✅
 4. **Phase 4** — LangGraph agent host (supervisor + specialists) ✅
-5. Production RAG (pgvector, hybrid retrieval, reranking, caching, grounding, citations)
+5. **Phase 5** — Production RAG (pgvector, hybrid retrieval, reranking, caching, grounding, citations) ✅
 6. Streamlit UI
 7. Guardrails, security, observability, evaluation datasets
 8. AWS Bedrock deployment docs and configuration
@@ -148,6 +148,14 @@ Full 17-step script: `docs/demo-script.md` (filled in Phase 7). Scenarios and go
 - **Human in the loop:** the graph pauses (`interrupt`) with state in Postgres; a manager's decision publishes `workflow.approval.decided`, which resumes the run.
 - **Failure handling:** unverified shipment or weak policy evidence escalates without a refund; a failed replacement releases the reserved stock, keeps the refund and ends `PARTIALLY_COMPLETED`.
 - Trigger by Kafka (`workflow.started`) or HTTP (`/api/agent/runs`, with SSE streaming). See `agent-host/README.md`.
+
+## Phase 5 design notes (RAG)
+- **Ingestion** is an async, incremental pipeline: extract, clean, semantic-chunk, reuse unchanged embeddings, batch-embed, store atomically, invalidate caches. Versioned, region/tenant/category-aware policies; archive without deleting.
+- **Retrieval** is hybrid (pgvector HNSW + full-text with synonyms, rank fusion), reranked, region-aware, compressed to a token budget and cached in Redis. It degrades to keyword search if embeddings fail.
+- **Answers** are generated from numbered evidence, then validated in code (citations, numbers, versions, polarity, injection). A failed answer is retried once, then replaced by verbatim evidence, then by an honest "could not verify".
+- **Measured:** on the 13 held-out questions the full pipeline answered 10/10 correctly, abstained on 3/3 unanswerable, fabricated nothing; about 3 s and $0.0002 uncached, about 50 ms cached. See `docs/rag-optimization.md`, `docs/hallucination-controls.md`, `docs/evaluation.md`.
+- `POST /api/agent/rag/ask` answers a policy question directly; the workflow's policy agent uses the same pipeline.
+- After pulling this phase, reset the database (`make clean`): the policy schema changed.
 
 ## Model routing
 `MODEL_PROVIDER` selects anthropic/openai (bedrock is Phase 8). Per-agent models are set via `MODEL_*` variables (all Sonnet to start; see `recommended_model`).

@@ -8,6 +8,21 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ecommerce}
     username: ${SPRING_DATASOURCE_USERNAME:ecommerce}
     password: ${SPRING_DATASOURCE_PASSWORD:ecommerce_local_pw}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 4
+      connection-timeout: 3000
+      # HNSW search breadth (higher = better recall, slower); iterative scan keeps filtered ANN queries from returning too few rows.
+      connection-init-sql: "SET hnsw.ef_search = 100; SET hnsw.iterative_scan = relaxed_order"
+  data:
+    redis:
+      url: ${REDIS_URL:redis://localhost:6379}
+      timeout: 500ms
+      connect-timeout: 500ms
+  http:
+    client:
+      connect-timeout: 3s
+      read-timeout: 15s
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
@@ -36,11 +51,45 @@ platform:
   security-enabled: true
   audit-service-url: ${PLATFORM_AUDIT_SERVICE_URL:http://localhost:8087}
 
+policy:
+  embedding-provider: ${POLICY_EMBEDDING_PROVIDER:hash}
+  embedding:
+    batch-size: 64
+    cache-ttl-days: 30
+  chunking:
+    max-tokens: 220
+    min-tokens: 60
+    overlap-tokens: 45
+    semantic: true
+  retrieval:
+    candidates: 20                 # per branch (vector, keyword)
+    max-chunks-per-document: 3
+    max-context-tokens: 450        # budget for all returned evidence
+    stage-timeout-ms: 4000
+    query-timeout-seconds: 3
+    min-confidence: 0.35           # below this we answer "insufficient evidence"
+    # Part of every cache key. Bump it whenever scoring, chunking or compression logic changes,
+    # so a deploy never serves answers computed by the old logic.
+    ranking-version: r4
+    cache-ttl-seconds: 600
+    cache-ttl-insufficient-seconds: 120
+  # Optional read replica for retrieval-heavy load: set the URL to route search queries there.
+  datasource:
+    read:
+      url: ${POLICY_READ_DATASOURCE_URL:}
+  refund:
+    min-delay-days: 3           # delayed this many days or more => eligible
+    approval-required-from: 0   # refund amounts >= this need approval (0 = always)
+  seed-on-startup: true
+
 management:
   endpoints:
     web:
       exposure:
         include: health,info,prometheus
+  health:
+    redis:
+      enabled: false              # a cache outage must not mark the service unhealthy
   tracing:
     sampling:
       probability: 1.0
@@ -54,14 +103,3 @@ management:
 logging:
   pattern:
     level: "%5p [${spring.application.name},%X{traceId:-},%X{correlationId:-}]"
-
-policy:
-  embedding-provider: ${POLICY_EMBEDDING_PROVIDER:hash}
-  retrieval:
-    candidates: 20
-    min-confidence: 0.35        # below this we answer "insufficient evidence"
-    max-context-chars: 1500     # token budget proxy for returned context
-  refund:
-    min-delay-days: 3           # delayed this many days or more => eligible
-    approval-required-from: 0   # refund amounts >= this need approval (0 = always)
-  seed-on-startup: true

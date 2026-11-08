@@ -7,7 +7,7 @@ import json
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from app.api.schemas import StartRunRequest
+from app.api.schemas import AskPolicyRequest, StartRunRequest
 from app.runner import RunError, RunManager
 
 router = APIRouter(prefix="/api/agent")
@@ -97,3 +97,27 @@ async def _sse(events) -> StreamingResponse:
         except RunError as e:
             yield f"data: {json.dumps({'event': 'error', 'code': e.code, 'message': str(e)})}\n\n"
     return StreamingResponse(body(), media_type="text/event-stream")
+
+
+@router.post("/rag/ask", dependencies=[Depends(authenticate)])
+async def ask_policy(body: AskPolicyRequest, request: Request, who=Depends(caller)):
+    """Answer a policy question with the full RAG pipeline: grounded, cited, validated, or an honest 'could not verify'."""
+    from app.llm import BudgetExceeded, UsageTracker
+    from app.mcp.client import McpGateway
+    from app.rag.factory import build_pipeline
+
+    runner: RunManager = request.app.state.runner
+    settings = request.app.state.settings
+    customer = who[0] or "SYSTEM"
+    if not runner.ask_limiter.allow(customer):
+        raise HTTPException(429, {"code": "RATE_LIMITED", "message": "Too many policy questions; try again in a minute"})
+    usage = UsageTracker(settings.run_token_budget)
+    pipeline = build_pipeline(runner.deps, McpGateway(settings, customer, "WF-RAG-ASK"), {"callbacks": [usage]})
+    filters = {"region": body.region, "policy_type": body.policy_type, "product_category": body.product_category,
+               "customer_segment": body.customer_segment, "version": body.version, "as_of_date": body.as_of_date}
+    try:
+        result = await pipeline.answer(body.question, filters)
+    except BudgetExceeded:
+        raise HTTPException(429, {"code": "TOKEN_BUDGET", "message": "Token budget exceeded for this question"})
+    result.diagnostics["usage"] = usage.summary()
+    return result

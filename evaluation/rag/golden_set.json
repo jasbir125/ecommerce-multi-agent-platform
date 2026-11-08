@@ -1,0 +1,728 @@
+{
+ "description": "Golden questions for the policy RAG. 'any_of' lists acceptable (policyKey, section) answers; 'facts' must appear in the returned evidence.",
+ "cases": [
+  {
+   "id": "delay-exact",
+   "category": "exact",
+   "query": "Is my order eligible for a refund if it arrives three days late?",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "refund-policy",
+      "section": "Delayed shipments"
+     }
+    ],
+    "facts": [
+     "three (3)"
+    ]
+   }
+  },
+  {
+   "id": "delay-chatty",
+   "category": "paraphrase",
+   "query": "My package is five days late, can I get my money back?",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "refund-policy",
+      "section": "Delayed shipments"
+     }
+    ],
+    "facts": [
+     "full refund"
+    ]
+   }
+  },
+  {
+   "id": "lost-paraphrase",
+   "category": "paraphrase",
+   "query": "parcel has not shown up and the courier has no updates for days",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "refund-policy",
+      "section": "Lost shipments"
+     },
+     {
+      "policyKey": "shipping-delay-policy",
+      "section": "Lost shipments"
+     }
+    ],
+    "facts": [
+     "five (5) days"
+    ]
+   }
+  },
+  {
+   "id": "lost-define",
+   "category": "exact",
+   "query": "when is a shipment treated as lost",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "refund-policy",
+      "section": "Lost shipments"
+     },
+     {
+      "policyKey": "shipping-delay-policy",
+      "section": "Lost shipments"
+     }
+    ],
+    "facts": [
+     "no scan"
+    ]
+   }
+  },
+  {
+   "id": "refund-timing",
+   "category": "paraphrase",
+   "query": "how long does it take for the refund to reach my card",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "refund-policy",
+      "section": "Refund method and timing"
+     }
+    ],
+    "facts": [
+     "5 to 7 business days"
+    ]
+   }
+  },
+  {
+   "id": "refund-senior",
+   "category": "paraphrase",
+   "query": "do refunds over 500 dollars need extra sign-off",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "refund-policy",
+      "section": "Approval"
+     }
+    ],
+    "facts": [
+     "senior manager"
+    ]
+   }
+  },
+  {
+   "id": "approval-expiry",
+   "category": "paraphrase",
+   "query": "how long does a pending approval stay valid before it lapses",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "refund-policy",
+      "section": "Approval"
+     }
+    ],
+    "facts": [
+     "30 minutes"
+    ]
+   }
+  },
+  {
+   "id": "cancel-shipped",
+   "category": "exact",
+   "query": "can I cancel an order that has already shipped",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "cancellation-policy",
+      "section": "After shipment"
+     },
+     {
+      "policyKey": "refund-policy",
+      "section": "Shipped orders"
+     }
+    ],
+    "facts": [
+     "cannot be cancelled"
+    ]
+   }
+  },
+  {
+   "id": "cancel-before",
+   "category": "paraphrase",
+   "query": "is it free to cancel an order before it leaves the warehouse",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "cancellation-policy",
+      "section": "Before shipment"
+     }
+    ],
+    "facts": [
+     "free of charge"
+    ]
+   }
+  },
+  {
+   "id": "replace-price",
+   "category": "paraphrase",
+   "query": "will my replacement cost more than the thing I originally bought",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "price-protection-policy",
+      "section": "Replacement price"
+     }
+    ],
+    "facts": [
+     "same or less"
+    ]
+   }
+  },
+  {
+   "id": "replace-stock",
+   "category": "paraphrase",
+   "query": "what happens to the reserved stock if the replacement order cannot be created",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "price-protection-policy",
+      "section": "Stock"
+     }
+    ],
+    "facts": [
+     "released"
+    ]
+   }
+  },
+  {
+   "id": "price-drop",
+   "category": "paraphrase",
+   "query": "the price went down after I bought it, can I get the difference back",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "price-protection-policy",
+      "section": "Price drops"
+     }
+    ],
+    "facts": [
+     "14 days"
+    ]
+   }
+  },
+  {
+   "id": "return-window",
+   "category": "paraphrase",
+   "query": "how long do I have to send an item back",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "returns-policy",
+      "section": "Return window"
+     }
+    ],
+    "facts": [
+     "30 days"
+    ]
+   }
+  },
+  {
+   "id": "return-ship",
+   "category": "paraphrase",
+   "query": "who pays postage when I return something that arrived broken",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "returns-policy",
+      "section": "Return shipping"
+     }
+    ],
+    "facts": [
+     "free"
+    ]
+   }
+  },
+  {
+   "id": "return-gift",
+   "category": "paraphrase",
+   "query": "can I return a gift card",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "returns-policy",
+      "section": "Non-returnable items"
+     }
+    ],
+    "facts": [
+     "Gift cards"
+    ]
+   }
+  },
+  {
+   "id": "eu-withdraw",
+   "category": "filter",
+   "query": "how many days do I have to withdraw from a purchase without giving a reason",
+   "filters": {
+    "region": "EU"
+   },
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "returns-policy-eu",
+      "section": "Cooling-off period"
+     }
+    ],
+    "facts": [
+     "14 days"
+    ]
+   }
+  },
+  {
+   "id": "eu-vs-global",
+   "category": "filter",
+   "query": "how many days do I have to return an item",
+   "filters": {
+    "region": "EU"
+   },
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "returns-policy-eu",
+      "section": "Cooling-off period"
+     }
+    ],
+    "facts": [
+     "14 days"
+    ]
+   }
+  },
+  {
+   "id": "warranty-length",
+   "category": "filter",
+   "query": "how long is the warranty on my headphones",
+   "filters": {
+    "productCategory": "electronics"
+   },
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "warranty-policy",
+      "section": "Coverage period"
+     }
+    ],
+    "facts": [
+     "12 month"
+    ]
+   }
+  },
+  {
+   "id": "warranty-water",
+   "category": "filter",
+   "query": "does the warranty cover water damage",
+   "filters": {
+    "productCategory": "electronics"
+   },
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "warranty-policy",
+      "section": "What is not covered"
+     }
+    ],
+    "facts": [
+     "Water damage"
+    ]
+   }
+  },
+  {
+   "id": "refund-dest",
+   "category": "paraphrase",
+   "query": "can the refund go to a different card than the one I paid with",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "payment-fraud-policy",
+      "section": "Refund destination"
+     },
+     {
+      "policyKey": "refund-policy",
+      "section": "Refund method and timing"
+     }
+    ],
+    "facts": [
+     "original payment method"
+    ]
+   }
+  },
+  {
+   "id": "fraud-review",
+   "category": "paraphrase",
+   "query": "how many refunds can an account get before the fraud team looks at it",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "payment-fraud-policy",
+      "section": "Fraud review"
+     }
+    ],
+    "facts": [
+     "three refunds in 90 days"
+    ]
+   }
+  },
+  {
+   "id": "chargeback",
+   "category": "paraphrase",
+   "query": "I already disputed the charge with my bank, will you also refund me",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "payment-fraud-policy",
+      "section": "Chargebacks"
+     }
+    ],
+    "facts": [
+     "chargeback"
+    ]
+   }
+  },
+  {
+   "id": "support-sla",
+   "category": "paraphrase",
+   "query": "how quickly will a human get back to me after an escalation",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "customer-support-sla",
+      "section": "Escalations"
+     }
+    ],
+    "facts": [
+     "one business day"
+    ]
+   }
+  },
+  {
+   "id": "phone-hours",
+   "category": "paraphrase",
+   "query": "what hours is phone support open",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "customer-support-sla",
+      "section": "Phone support"
+     }
+    ],
+    "facts": [
+     "9:00"
+    ]
+   }
+  },
+  {
+   "id": "tracking-refresh",
+   "category": "paraphrase",
+   "query": "how often is the tracking information updated",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "shipping-delay-policy",
+      "section": "Tracking updates"
+     }
+    ],
+    "facts": [
+     "four hours"
+    ]
+   }
+  },
+  {
+   "id": "weather",
+   "category": "paraphrase",
+   "query": "does bad weather count towards the delay",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "shipping-delay-policy",
+      "section": "When a shipment counts as delayed"
+     }
+    ],
+    "facts": [
+     "weather"
+    ]
+   }
+  },
+  {
+   "id": "ship-fee",
+   "category": "paraphrase",
+   "query": "do I get the shipping fee back as well",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "refund-policy",
+      "section": "Refund amount"
+     }
+    ],
+    "facts": [
+     "Shipping fees"
+    ]
+   }
+  },
+  {
+   "id": "offered",
+   "category": "paraphrase",
+   "query": "what can a customer choose when their shipment is lost or late",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "shipping-delay-policy",
+      "section": "What customers are offered"
+     },
+     {
+      "policyKey": "shipping-delay-policy",
+      "section": "Lost shipments"
+     },
+     {
+      "policyKey": "refund-policy",
+      "section": "Delayed shipments"
+     }
+    ],
+    "facts": [
+     "refund"
+    ]
+   }
+  },
+  {
+   "id": "identity",
+   "category": "paraphrase",
+   "query": "do agents have to check I own the order before refunding",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "payment-fraud-policy",
+      "section": "Identity"
+     }
+    ],
+    "facts": [
+     "owns the order"
+    ]
+   }
+  },
+  {
+   "id": "version-pin",
+   "category": "version",
+   "query": "can I get a refund within days of delivery",
+   "filters": {
+    "version": "1",
+    "asOfDate": "2025-06-01"
+   },
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "refund-policy",
+      "section": "Eligibility"
+     }
+    ],
+    "facts": [
+     "7 days"
+    ]
+   }
+  },
+  {
+   "id": "version-asof",
+   "category": "version",
+   "query": "are delayed shipments covered by the refund policy",
+   "filters": {
+    "asOfDate": "2025-06-01"
+   },
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "refund-policy",
+      "section": "Delayed shipments"
+     }
+    ],
+    "facts": [
+     "Delayed shipments are not covered by this legacy policy"
+    ]
+   }
+  },
+  {
+   "id": "version-current",
+   "category": "version",
+   "query": "are delayed shipments covered by the refund policy",
+   "filters": {},
+   "answerable": true,
+   "expect": {
+    "any_of": [
+     {
+      "policyKey": "refund-policy",
+      "section": "Delayed shipments"
+     }
+    ],
+    "facts": [
+     "full refund"
+    ]
+   }
+  },
+  {
+   "id": "oos-france",
+   "category": "out_of_scope",
+   "query": "what is the capital of France",
+   "filters": {},
+   "answerable": false,
+   "expect": {
+    "any_of": [],
+    "facts": []
+   }
+  },
+  {
+   "id": "oos-pricematch",
+   "category": "out_of_scope",
+   "query": "do you price match competitors",
+   "filters": {},
+   "answerable": false,
+   "expect": {
+    "any_of": [],
+    "facts": []
+   }
+  },
+  {
+   "id": "oos-crypto",
+   "category": "out_of_scope",
+   "query": "can I pay with cryptocurrency",
+   "filters": {},
+   "answerable": false,
+   "expect": {
+    "any_of": [],
+    "facts": []
+   }
+  },
+  {
+   "id": "oos-sunday",
+   "category": "out_of_scope",
+   "query": "what are your store opening hours on sunday",
+   "filters": {},
+   "answerable": false,
+   "expect": {
+    "any_of": [],
+    "facts": []
+   }
+  },
+  {
+   "id": "oos-giftwrap",
+   "category": "out_of_scope",
+   "query": "do you offer gift wrapping",
+   "filters": {},
+   "answerable": false,
+   "expect": {
+    "any_of": [],
+    "facts": []
+   }
+  },
+  {
+   "id": "oos-password",
+   "category": "out_of_scope",
+   "query": "how do I reset my password",
+   "filters": {},
+   "answerable": false,
+   "expect": {
+    "any_of": [],
+    "facts": []
+   }
+  },
+  {
+   "id": "oos-joke",
+   "category": "out_of_scope",
+   "query": "tell me a joke about cats",
+   "filters": {},
+   "answerable": false,
+   "expect": {
+    "any_of": [],
+    "facts": []
+   }
+  },
+  {
+   "id": "oos-toaster",
+   "category": "out_of_scope",
+   "query": "warranty on quantum toasters",
+   "filters": {},
+   "answerable": false,
+   "expect": {
+    "any_of": [],
+    "facts": []
+   }
+  },
+  {
+   "id": "oos-visa",
+   "category": "out_of_scope",
+   "query": "how do I apply for a work visa",
+   "filters": {},
+   "answerable": false,
+   "expect": {
+    "any_of": [],
+    "facts": []
+   }
+  },
+  {
+   "id": "oos-recipe",
+   "category": "out_of_scope",
+   "query": "best recipe for chocolate cake",
+   "filters": {},
+   "answerable": false,
+   "expect": {
+    "any_of": [],
+    "facts": []
+   }
+  }
+ ]
+}

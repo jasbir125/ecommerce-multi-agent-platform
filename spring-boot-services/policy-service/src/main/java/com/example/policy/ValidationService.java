@@ -33,7 +33,7 @@ public class ValidationService {
         String region = req.region() == null || req.region().isBlank() ? "ALL" : req.region().toUpperCase();
         var doc = jdbc.sql("""
                 SELECT id, policy_key, version, title FROM policy_document
-                WHERE policy_key = 'refund-policy'
+                WHERE policy_key = 'refund-policy' AND status = 'ACTIVE'
                   AND (effective_from IS NULL OR effective_from <= :d) AND (effective_to IS NULL OR effective_to >= :d)
                   AND (region = 'ALL' OR region = :r)
                 ORDER BY effective_from DESC NULLS LAST, id DESC LIMIT 1""")
@@ -73,13 +73,13 @@ public class ValidationService {
     }
 
     public PolicyDoc byId(long id) {
-        return jdbc.sql("SELECT id, policy_key, version, title, content, effective_from, effective_to, region FROM policy_document WHERE id = :id")
+        return jdbc.sql("SELECT id, policy_key, version, title, content, policy_type, status, effective_from, effective_to, region FROM policy_document WHERE id = :id")
                 .param("id", id).query(PolicyDoc.class).optional()
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "POLICY_NOT_FOUND", "Unknown policy"));
     }
 
     public PolicyDoc byKeyVersion(String key, String version) {
-        return jdbc.sql("SELECT id, policy_key, version, title, content, effective_from, effective_to, region FROM policy_document WHERE policy_key = :k AND version = :v")
+        return jdbc.sql("SELECT id, policy_key, version, title, content, policy_type, status, effective_from, effective_to, region FROM policy_document WHERE policy_key = :k AND version = :v")
                 .param("k", key).param("v", version).query(PolicyDoc.class).optional()
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "POLICY_NOT_FOUND", "Unknown policy version"));
     }

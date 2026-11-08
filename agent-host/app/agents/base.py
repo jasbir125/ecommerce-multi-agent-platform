@@ -19,9 +19,10 @@ SHARED_RULES = """Rules you must follow:
 
 
 async def run_react(deps: Deps, ctx: RunContext, agent: str, system: str, prompt: str,
-                    config: RunnableConfig, response_format: Any = None) -> tuple[str, Any]:
+                    config: RunnableConfig, response_format: Any = None, extra_tools: dict | None = None) -> tuple[str, Any]:
     """Run one specialist as a ReAct agent over its read-only tools. Returns (final text, structured response)."""
-    tools = guard_tools(await ctx.gateway.tools(), agent, ctx.tool_policy, ctx.tool_log)
+    available = {**await ctx.gateway.tools(), **(extra_tools or {})}
+    tools = guard_tools(available, agent, ctx.tool_policy, ctx.tool_log)
     graph = create_agent(deps.models.get(agent), tools, system_prompt=f"{system}\n\n{SHARED_RULES}",
                          response_format=response_format, checkpointer=False)
     cfg = {**config, "recursion_limit": 14, "metadata": {**config.get("metadata", {}), "agent": agent}}
