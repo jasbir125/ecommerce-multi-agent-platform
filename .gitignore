@@ -1,0 +1,19 @@
+.env
+*.log
+.DS_Store
+.idea/
+.vscode/
+# Java / Maven
+target/
+*.class
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Planning inputs, not part of the product
+first_prompt.txt
+master_prompt.txt
+how_to_use_prompt
+recommended_model

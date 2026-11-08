@@ -1,0 +1,332 @@
+# =============================================================================
+# Ecommerce Multi-Agent Order Recovery Platform - local stack
+#
+#   docker compose up -d                          -> infrastructure only
+#   docker compose --profile apps up -d --build   -> infrastructure + all apps
+#
+# Inside the compose network use service names (postgres:5432, kafka:9092,
+# redis:6379, streamlit:8501). Spring Boot services you run on your host from
+# an IDE are reachable from containers at host.docker.internal:<port>.
+# =============================================================================
+name: ecommerce-multi-agent-platform
+
+x-app-common: &app-common
+  env_file: .env
+  restart: unless-stopped
+  networks: [platform-net]
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+# Overrides so containers talk to each other by service name, not localhost.
+x-internal-env: &internal-env
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-ecommerce}
+  SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-ecommerce}
+  SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-ecommerce_local_pw}
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  REDIS_URL: redis://redis:6379
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  ORDER_SERVICE_URL: http://order-service:8081
+  SHIPMENT_SERVICE_URL: http://shipment-service:8082
+  PAYMENT_SERVICE_URL: http://payment-service:8083
+  INVENTORY_SERVICE_URL: http://inventory-service:8084
+  APPROVAL_SERVICE_URL: http://approval-service:8085
+  POLICY_SERVICE_URL: http://policy-service:8086
+  AUDIT_SERVICE_URL: http://audit-service:8087
+  WORKFLOW_SERVICE_URL: http://workflow-service:8088
+  NOTIFICATION_SERVICE_URL: http://notification-service:8089
+  ECOMMERCE_MCP_URL: http://ecommerce-mcp-server:8090/mcp
+  POLICY_MCP_URL: http://policy-mcp-server:8091/mcp
+
+services:
+  # ------------------------------------------------------------------ data stores
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: platform-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ecommerce}
+      POSTGRES_USER: ${POSTGRES_USER:-ecommerce}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecommerce_local_pw}
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Runs once on first start (empty data volume only).
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ecommerce} -d ${POSTGRES_DB:-ecommerce}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [platform-net]
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: platform-redis
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports: ["6379:6379"]
+    volumes:
+      - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [platform-net]
+
+  # ------------------------------------------------------------------------ kafka
+  kafka:
+    image: apache/kafka:3.8.0
+    container_name: platform-kafka
+    ports: ["9092:9092"]
+    environment:
+      # Single-node KRaft: one process is both broker and controller.
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # kafka:19092 for containers, localhost:9092 for clients on the host.
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"   # topics are created explicitly by kafka-init
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    volumes: [kafkadata:/var/lib/kafka/data]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:19092 >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks: [platform-net]
+
+  # One-shot job: creates topics (+ dead-letter topics) from infra/kafka/topics.txt
+  kafka-init:
+    image: apache/kafka:3.8.0
+    container_name: platform-kafka-init
+    depends_on:
+      kafka: { condition: service_healthy }
+    volumes: ["./infra/kafka:/scripts:ro"]
+    entrypoint: ["/bin/bash", "/scripts/create-topics.sh"]
+    environment:
+      BOOTSTRAP_SERVER: kafka:19092
+    restart: "no"
+    networks: [platform-net]
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: platform-kafka-ui
+    depends_on: [kafka]
+    ports: ["8180:8080"]     # 8080 is left free for host-run Spring Boot apps
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:19092
+    networks: [platform-net]
+
+  # ---------------------------------------------------------------- observability
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    container_name: platform-otel
+    command: ["--config=/etc/otel/config.yml"]
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # metrics exposed for Prometheus
+    volumes:
+      - ./infra/opentelemetry/otel-collector-config.yml:/etc/otel/config.yml:ro
+    networks: [platform-net]
+
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: platform-prometheus
+    ports: ["9090:9090"]
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    networks: [platform-net]
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: platform-grafana
+    depends_on: [prometheus]
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafanadata:/var/lib/grafana
+    networks: [platform-net]
+
+  # ------------------------------------------------- Spring Boot services (apps)
+  order-service:
+    <<: *app-common
+    profiles: [apps]
+    build:
+      context: ./spring-boot-services
+      args: { MODULE: order-service }
+    container_name: platform-order-service
+    ports: ["8081:8081"]
+    environment: *internal-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  shipment-service:
+    <<: *app-common
+    profiles: [apps]
+    build:
+      context: ./spring-boot-services
+      args: { MODULE: shipment-service }
+    container_name: platform-shipment-service
+    ports: ["8082:8082"]
+    environment: *internal-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  payment-service:
+    <<: *app-common
+    profiles: [apps]
+    build:
+      context: ./spring-boot-services
+      args: { MODULE: payment-service }
+    container_name: platform-payment-service
+    ports: ["8083:8083"]
+    environment: *internal-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  inventory-service:
+    <<: *app-common
+    profiles: [apps]
+    build:
+      context: ./spring-boot-services
+      args: { MODULE: inventory-service }
+    container_name: platform-inventory-service
+    ports: ["8084:8084"]
+    environment: *internal-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  approval-service:
+    <<: *app-common
+    profiles: [apps]
+    build:
+      context: ./spring-boot-services
+      args: { MODULE: approval-service }
+    container_name: platform-approval-service
+    ports: ["8085:8085"]
+    environment: *internal-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  policy-service:
+    <<: *app-common
+    profiles: [apps]
+    build:
+      context: ./spring-boot-services
+      args: { MODULE: policy-service }
+    container_name: platform-policy-service
+    ports: ["8086:8086"]
+    environment: *internal-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  audit-service:
+    <<: *app-common
+    profiles: [apps]
+    build:
+      context: ./spring-boot-services
+      args: { MODULE: audit-service }
+    container_name: platform-audit-service
+    ports: ["8087:8087"]
+    environment: *internal-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  workflow-service:
+    <<: *app-common
+    profiles: [apps]
+    build:
+      context: ./spring-boot-services
+      args: { MODULE: workflow-service }
+    container_name: platform-workflow-service
+    ports: ["8088:8088"]
+    environment: *internal-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  notification-service:
+    <<: *app-common
+    profiles: [apps]
+    build:
+      context: ./spring-boot-services
+      args: { MODULE: notification-service }
+    container_name: platform-notification-service
+    ports: ["8089:8089"]
+    environment: *internal-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  # ------------------------------------------------------ Python FastMCP servers
+  ecommerce-mcp-server:
+    <<: *app-common
+    profiles: [apps]
+    build: ./mcp-servers/ecommerce-mcp-server
+    container_name: platform-ecommerce-mcp
+    ports: ["8090:8090"]
+    environment: *internal-env
+
+  policy-mcp-server:
+    <<: *app-common
+    profiles: [apps]
+    build: ./mcp-servers/policy-mcp-server
+    container_name: platform-policy-mcp
+    ports: ["8091:8091"]
+    environment: *internal-env
+
+  # ------------------------------------------------------------ Python agent host
+  agent-host:
+    <<: *app-common
+    profiles: [apps]
+    build: ./agent-host
+    container_name: platform-agent-host
+    ports: ["8092:8092"]
+    environment: *internal-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  # --------------------------------------------------------------------- Streamlit
+  streamlit:
+    <<: *app-common
+    profiles: [apps]
+    build: ./streamlit-ui
+    container_name: platform-streamlit
+    ports: ["8501:8501"]
+    environment: *internal-env
+    depends_on: [agent-host]
+
+networks:
+  platform-net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redisdata:
+  kafkadata:
+  promdata:
+  grafanadata:

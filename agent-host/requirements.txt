@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+langchain
+langgraph
+langchain-anthropic
+langchain-openai
+langchain-mcp-adapters
+aiokafka
+asyncpg
+redis
+opentelemetry-sdk
+opentelemetry-exporter-otlp

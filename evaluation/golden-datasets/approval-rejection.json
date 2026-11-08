@@ -1,0 +1,12 @@
+{
+  "name": "approval-rejection",
+  "status": "TODO - populated in Phase 7",
+  "input": {},
+  "expected_intent": null,
+  "expected_tools": [],
+  "expected_approval_required": null,
+  "expected_final_status": null,
+  "expected_guardrail_behavior": null,
+  "expected_rag_confidence": null,
+  "expected_citations": []
+}

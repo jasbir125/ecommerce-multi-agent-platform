@@ -1,0 +1,15 @@
+# name[:partitions] - one per line. Each topic also gets a <name>.dlt dead-letter topic.
+shipment.exceptions:3
+workflow.started:3
+workflow.agent.completed:3
+workflow.approval.requested:3
+workflow.approval.decided:3
+payment.refund.requested:3
+payment.refund.initiated:3
+inventory.reservation.requested:3
+inventory.reservation.completed:3
+order.replacement.created:3
+customer.notification.requested:3
+order.recovery.completed:3
+workflow.failed:3
+workflow.compensation.requested:3
