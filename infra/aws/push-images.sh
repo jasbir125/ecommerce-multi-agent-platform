@@ -20,7 +20,7 @@ push() { # name, context, extra build args...
   docker push "$img"
 }
 
-for m in auth-service order-service shipment-service payment-service inventory-service approval-service \
+for m in order-service shipment-service payment-service inventory-service approval-service \
          policy-service audit-service workflow-service notification-service; do
   push "$m" "$ROOT/spring-boot-services" --build-arg MODULE="$m"
 done

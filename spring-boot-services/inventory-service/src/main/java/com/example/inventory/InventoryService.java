@@ -23,11 +23,8 @@ public class InventoryService {
     private final EventPublisher events;
     private final AuditClient audit;
     private final io.micrometer.core.instrument.MeterRegistry metrics;
-    private final com.example.common.security.FaultInjector faults;
 
-    public InventoryService(JdbcClient jdbc, EventPublisher events, AuditClient audit, io.micrometer.core.instrument.MeterRegistry metrics,
-                            com.example.common.security.FaultInjector faults) {
-        this.faults = faults;
+    public InventoryService(JdbcClient jdbc, EventPublisher events, AuditClient audit, io.micrometer.core.instrument.MeterRegistry metrics) {
         this.metrics = metrics;
         this.jdbc = jdbc;
         this.events = events;
@@ -63,7 +60,6 @@ public class InventoryService {
         if (existing.isPresent()) {
             return existing.get();
         }
-        faults.check("inventory", "reserve", req.workflowId());
         int updated = jdbc.sql("""
                 UPDATE product SET available_qty = available_qty - :q, reserved_qty = reserved_qty + :q
                 WHERE product_id = :p AND available_qty >= :q""")

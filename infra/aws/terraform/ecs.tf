@@ -6,8 +6,6 @@ locals {
   secret = { for k, v in aws_secretsmanager_secret.app : k => v.arn }
 
   common_env = {
-    PLATFORM_ENV                   = var.platform_env
-    PLATFORM_FAULTS_ENABLED        = "false"
     LOG_FORMAT                     = "json" # Python services: one JSON object per line for CloudWatch (Spring ignores it)
     JAVA_TOOL_OPTIONS              = "-XX:MaxRAMPercentage=75"
     SPRING_DATASOURCE_URL          = "jdbc:postgresql://${aws_db_instance.postgres.address}:5432/ecommerce?sslmode=require"
@@ -15,13 +13,6 @@ locals {
     SPRING_KAFKA_BOOTSTRAP_SERVERS = aws_msk_cluster.kafka.bootstrap_brokers
     KAFKA_BOOTSTRAP_SERVERS        = aws_msk_cluster.kafka.bootstrap_brokers
     REDIS_URL                      = "redis://${aws_elasticache_replication_group.redis.primary_endpoint_address}:6379"
-    PLATFORM_JWT_JWKS_URL          = "${local.url["auth-service"]}/.well-known/jwks.json"
-    PLATFORM_JWT_ISSUER            = "order-recovery-auth"
-    PLATFORM_JWT_AUDIENCE          = "order-recovery-api"
-    AUTH_JWKS_URL                  = "${local.url["auth-service"]}/.well-known/jwks.json"
-    AUTH_ISSUER                    = "order-recovery-auth"
-    AUTH_AUDIENCE                  = "order-recovery-api"
-    AUTH_SERVICE_URL               = local.url["auth-service"]
     PLATFORM_AUDIT_SERVICE_URL     = local.url["audit-service"]
     ORDER_SERVICE_URL              = local.url["order-service"]
     SHIPMENT_SERVICE_URL           = local.url["shipment-service"]
@@ -54,8 +45,6 @@ locals {
       CHECKPOINTER              = "postgres"
     }, var.enable_guardrail ? { BEDROCK_GUARDRAIL_ID = aws_bedrock_guardrail.agents[0].guardrail_id } : {})
     streamlit-ui = {
-      UI_AUTH_MODE                    = "login"
-      UI_SHOW_DEMO_CREDENTIALS        = "false"
       STREAMLIT_API_BASE_URL          = local.url["workflow-service"]
       STREAMLIT_APPROVAL_API_BASE_URL = local.url["approval-service"]
       AGENT_HOST_URL                  = local.url["agent-host"]
@@ -63,7 +52,6 @@ locals {
   }
 
   extra_secrets = {
-    auth-service     = { AUTH_PRIVATE_KEY_PEM = local.secret["auth-key"], AUTH_DEMO_PASSWORD = local.secret["demo-password"] }
     policy-service   = { OPENAI_API_KEY = local.secret["openai-api-key"] }
     workflow-service = { OPENAI_API_KEY = local.secret["openai-api-key"] }
     agent-host = merge({ DATABASE_URL = aws_secretsmanager_secret.database_url.arn },
@@ -79,13 +67,12 @@ locals {
   public_paths = merge(
     { streamlit-ui = [] },
     var.expose_apis ? {
-      auth-service     = ["/api/auth/*", "/.well-known/*"]
       workflow-service = ["/api/workflows*", "/api/ai/*"]
       approval-service = ["/api/approvals*"]
       agent-host       = ["/api/agent/*"]
     } : {}
   )
-  rule_priority = { auth-service = 10, workflow-service = 20, approval-service = 30, agent-host = 40 }
+  rule_priority = { workflow-service = 20, approval-service = 30, agent-host = 40 }
 }
 
 resource "aws_ecs_cluster" "main" {

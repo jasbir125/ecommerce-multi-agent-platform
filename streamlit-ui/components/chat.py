@@ -13,18 +13,9 @@ DEFAULT_MESSAGE = ("My order ORD-7842 has been delayed by five days. Cancel the 
 
 def render(api, who: Identity) -> None:
     st.caption("Submit a delayed-shipment request as a customer. Agents investigate, ask a manager to approve any refund, then execute.")
-    signed_in = bool(who.token)
-    if signed_in and not who.customer_id:
-        st.info("Requests are submitted by customers. You are signed in as staff: use **Approvals**, **Workflow explorer** or **Admin**.")
-        wf = selected_workflow()
-        if wf:
-            st.divider()
-            workflow_view.render(api, who, wf, key="chat")
-        return
     with st.form("request"):
         c1, c2, c3 = st.columns([1, 1, 2])
-        customer = c1.text_input("Customer ID", value=who.customer_id or "CUST-1001", disabled=signed_in,
-                                 help="Taken from your sign-in." if signed_in else None)
+        customer = c1.text_input("Customer ID", value=who.customer_id or "CUST-1001")
         order = c2.text_input("Order ID", value="ORD-7842")
         mode = c3.radio("How to run", ["Live (streamed)", "Queued (via Kafka)"], horizontal=True,
                         help="Live streams each agent step as it happens. Queued creates the workflow and lets the agent host pick it up from Kafka.")
@@ -36,7 +27,7 @@ def render(api, who: Identity) -> None:
         if not (customer and order and message):
             st.error("Customer ID, order ID and a request are all required.")
         else:
-            customer_who = Identity("customer", customer, who.name, token=who.token)
+            customer_who = Identity("customer", customer, who.name)
             try:
                 _submit(api, customer_who, order, message, live=mode.startswith("Live"))
             except ApiError as e:

@@ -17,7 +17,6 @@ public class PaymentController {
 
     @PostMapping
     public Refund initiate(@Valid @RequestBody RefundRequest request) {
-        CallerHolder.requireInternal();
         return service.initiate(request);
     }
 

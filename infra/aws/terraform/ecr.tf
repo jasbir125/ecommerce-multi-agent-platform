@@ -1,6 +1,5 @@
 locals {
   spring_services = {
-    auth-service         = { port = 8093, cpu = 512, memory = 1024 }
     order-service        = { port = 8081, cpu = 512, memory = 1024 }
     shipment-service     = { port = 8082, cpu = 512, memory = 1024 }
     payment-service      = { port = 8083, cpu = 512, memory = 1024 }

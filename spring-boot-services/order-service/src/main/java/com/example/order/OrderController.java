@@ -40,7 +40,6 @@ public class OrderController {
     @PostMapping("/orders/replacement")
     @ResponseStatus(HttpStatus.CREATED)
     public ReplacementResponse replacement(@Valid @RequestBody ReplacementRequest request) {
-        CallerHolder.requireInternal();
         return service.createReplacement(request);
     }
 }

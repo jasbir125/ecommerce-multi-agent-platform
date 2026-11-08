@@ -1,14 +1,19 @@
 # Security
 
-_Placeholder - filled in a later phase (see README roadmap)._
+Identity model (demo): every call between components carries `X-Service-Token` (a shared secret, checked in constant time) plus
+`X-Customer-Id` and `X-Roles` for the customer and roles it acts for. The Streamlit UI plays the trusted front end and sets these headers
+for the persona chosen in the sidebar. Services enforce the rest themselves:
 
-## Phase 7 addendum
+- **Ownership:** a customer can only read or change their own orders, shipments and workflows (403 otherwise, and an audit event).
+- **Roles:** approving needs MANAGER/APPROVER, workflow control needs OPERATOR/ADMIN/AGENT, policy ingestion needs ADMIN.
+- **Agents are read-only:** the LLM agents can only call read tools; every write goes through deterministic code that re-reads the approval first, and the Spring services re-check approval, amounts and idempotency keys.
+- **Untrusted text:** customer messages and retrieved policy text are data, never instructions; suspicious text is withheld and audited.
+- **Logs:** passwords, tokens, keys, e-mails and phone numbers are masked before they are written (see `logging.md`).
 
-- **Identity:** end users present an RS256 Bearer JWT issued by `auth-service` (JWKS at `/.well-known/jwks.json`, key rotation supported); identity comes from the token only. Trusted platform components use `X-Service-Token` plus identity headers. Internal-only endpoints reject end-user tokens.
-- **Hardening:** body-size limits, unknown-route and malformed-JSON handling, startup security check (refuses insecure settings when `PLATFORM_ENV=production`), fault injection off by default and refused in production.
-- **Verification:** `make eval-security` runs 81 live checks.
-- **Residual risks:** demo users and the shared service token are for local use only; replace with an IdP and per-service credentials before production (see Phase 8 deployment notes).
+Not in scope for the demo (the spec's architecture shows an API gateway with OAuth2/OIDC/JWT in front): real user authentication.
+Anyone holding the service token can claim any customer or role, so the token must stay secret and the services must sit behind a
+gateway that authenticates users before setting these headers.
 
-## AWS deployment addendum (Phase 8)
+## AWS deployment
 
-Terraform (`infra/aws/terraform`) puts only the load balancer in public subnets, keeps data stores private behind a security group, stores every secret in Secrets Manager, gives only the agent host the Bedrock permissions, and sets `PLATFORM_ENV=production`. Residual risks are listed in `infra/aws/deployment.md` (plaintext Kafka and Redis inside the VPC, demo identity provider, HTTP unless a certificate is supplied).
+Terraform (`infra/aws/terraform`) puts only the load balancer in public subnets, keeps data stores private behind a security group, stores every secret in Secrets Manager, and gives only the agent host the Bedrock permissions. Residual risks are listed in `infra/aws/deployment.md` (plaintext Kafka and Redis inside the VPC, no user authentication, HTTP unless a certificate is supplied).

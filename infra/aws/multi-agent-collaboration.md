@@ -9,7 +9,7 @@ Bedrock supervisor mode: a supervisor agent routes sub-tasks to collaborator age
 | Specialists are read-only ReAct agents | Collaborators with read-only action groups |
 | Decision, approval pause and execution are deterministic nodes | Not an agent: run them in the workflow service / Step Functions after human approval |
 | Per-run token budget and cost tracking | Agent traces + CloudWatch metrics; budgets need your own wrapper |
-| Evaluation datasets | Re-point `evaluation/evaluators` at the Bedrock agent alias via a new runner |
+| Evaluation datasets | Re-point `evaluation/run_golden.py` at the Bedrock agent alias |
 
 Recommendation: keep the LangGraph runtime and Bedrock models/guardrails (Option A). Choose Option C only if the organisation requires AWS-managed orchestration; then keep decision, approval and money movement outside the model-driven agents, re-run the golden datasets (especially approval-rejection, prompt-injection, partial-failure) and compare before switching traffic.
 

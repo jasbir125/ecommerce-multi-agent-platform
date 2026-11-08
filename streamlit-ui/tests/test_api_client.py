@@ -110,7 +110,7 @@ def test_stream_errors_surface_as_api_errors():
 def test_health_reports_each_service():
     def handler(req):
         return httpx.Response(200 if "8092" not in str(req.url) else 500)
-    assert client(handler).health() == {"auth-service": True, "workflow-service": True, "approval-service": True, "agent-host": False}
+    assert client(handler).health() == {"workflow-service": True, "approval-service": True, "agent-host": False}
 
 
 def test_config_reads_the_environment(monkeypatch):
@@ -119,39 +119,6 @@ def test_config_reads_the_environment(monkeypatch):
     monkeypatch.setenv("MCP_SERVICE_TOKEN", "tok")
     c = Config.from_env()
     assert c.workflow_url == "http://wf:1" and c.agent_url == "http://agent:2" and c.service_token == "tok"
-
-
-def test_login_mode_sends_only_the_users_token_never_the_service_token():
-    seen = {}
-
-    def handler(req):
-        seen.update(req.headers)
-        return httpx.Response(200, json={})
-    client(handler).get_workflow(Identity("customer", "CUST-1001", "alice", token="abc.def.ghi"), "WF-1")
-    assert seen["authorization"] == "Bearer abc.def.ghi"
-    assert "x-service-token" not in seen and "x-customer-id" not in seen and "x-roles" not in seen
-
-
-def test_a_refused_token_raises_session_expired():
-    from api_client import SessionExpired
-    with pytest.raises(SessionExpired):
-        client(lambda r: httpx.Response(401, json={"code": "INVALID_TOKEN"})).get_workflow(Identity("customer", "C", "a", token="t"), "WF-1")
-
-
-def test_login_posts_credentials_to_the_auth_service():
-    seen = {}
-
-    def handler(req):
-        seen["url"], seen["body"] = str(req.url), json.loads(req.content)
-        return httpx.Response(200, json={"accessToken": "t", "expiresIn": 900})
-    assert client(handler).login("alice", "pw")["accessToken"] == "t"
-    assert seen["url"] == "http://localhost:8093/api/auth/token" and seen["body"] == {"username": "alice", "password": "pw"}
-
-
-def test_login_errors_carry_the_service_code():
-    with pytest.raises(ApiError) as e:
-        client(lambda r: httpx.Response(429, json={"code": "TOO_MANY_ATTEMPTS", "detail": "slow down"})).login("alice", "x")
-    assert e.value.code == "TOO_MANY_ATTEMPTS"
 
 
 def test_every_call_sends_a_correlation_id_and_logs_it(caplog):
@@ -163,7 +130,7 @@ def test_every_call_sends_a_correlation_id_and_logs_it(caplog):
         return httpx.Response(200, json={"workflowId": "WF-1", "accessToken": "should-not-be-logged"})
 
     api = ApiClient(Config(), transport=httpx.MockTransport(handler))
-    who = Identity("customer", "CUST-1001", "alice", token="t")
+    who = Identity("customer", "CUST-1001", "alice")
     with caplog.at_level(logging.INFO, logger="ui.api"):
         api.create_workflow(who, "ORD-1", "late", correlation_id="my-corr-id")
     assert seen["corr"] == "my-corr-id"

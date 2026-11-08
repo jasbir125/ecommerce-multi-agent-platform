@@ -3,6 +3,10 @@ import json, pathlib, uuid
 
 HERE = pathlib.Path(__file__).parent
 JSON = [{"key": "Content-Type", "value": "application/json"}]
+PERSONA = {"alice": [{"key": "X-Customer-Id", "value": "{{customerId}}"}],                       # a customer
+           "olivia": [{"key": "X-Roles", "value": "OPERATOR"}],                                    # operator
+           "manny": [{"key": "X-Roles", "value": "MANAGER,OPERATOR"}],                             # manager (can approve)
+           "admin": [{"key": "X-Roles", "value": "ADMIN,OPERATOR"}]}                              # admin (policy ingest)
 
 
 def req(name, method, svc, path, body=None, query=None, auth=None, headers=None, tests=None, desc=""):
@@ -13,10 +17,8 @@ def req(name, method, svc, path, body=None, query=None, auth=None, headers=None,
     if body is not None:
         r["header"] = r["header"] + JSON
         r["body"] = {"mode": "raw", "raw": json.dumps(body, indent=2), "options": {"raw": {"language": "json"}}}
-    if auth == "none":
-        r["auth"] = {"type": "noauth"}
-    elif auth:
-        r["auth"] = {"type": "bearer", "bearer": [{"key": "token", "value": "{{token_%s}}" % auth, "type": "string"}]}
+    if auth != "none":                      # who is calling: the trusted caller's token + the customer / roles it acts for
+        r["header"] = [{"key": "X-Service-Token", "value": "{{serviceToken}}"}, *PERSONA[auth or "alice"], *r["header"]]
     item = {"name": name, "request": r}
     if tests:
         item["event"] = [{"listen": "test", "script": {"type": "text/javascript", "exec": tests.split("\n")}}]
@@ -31,23 +33,8 @@ def setvar(var, expr):
     return f"pm.test('status 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));\nconst j = pm.response.json();\nconst v = {expr};\nif (v !== undefined) pm.collectionVariables.set('{var}', v);"
 
 
-def login(user, extra=""):
-    return req(f"Login as {user}", "POST", "authUrl", "/api/auth/token", {"username": user, "password": "{{demoPassword}}"}, auth="none",
-               tests="pm.test('status 200', () => pm.response.to.have.status(200));\nconst t = pm.response.json().accessToken;\n"
-                     f"pm.collectionVariables.set('token_{user}', t);{extra}",
-               desc=f"Issues an RS256 JWT for {user} and stores it as {{{{token_{user}}}}}.")
-
-
-
 S = lambda c: [c]
 items = []
-
-items.append(folder("00 Auth (auth-service :8093)", [
-    login("alice"), login("bob"), login("olivia"), login("manny"), login("admin"),
-    req("JWKS (public keys)", "GET", "authUrl", "/.well-known/jwks.json", auth="none"),
-    req("Login - wrong password (expect 401)", "POST", "authUrl", "/api/auth/token", {"username": "alice", "password": "wrong"}, auth="none",
-        tests="pm.test('rejected', () => pm.expect(pm.response.code).to.be.oneOf([401, 429]));"),
-], "Run the five logins first (each stores token_<user>; every request below states which user it uses). Customers (alice=CUST-1001, bob=CUST-2002), operator (olivia), manager (manny), admin."))
 
 items.append(folder("01 Inventory (:8084)", [
     req("Search products", "GET", "inventoryUrl", "/api/catalog/products/search", query=[("q", "headphones", False), ("category", "", True), ("maxPrice", "150", True), ("inStockOnly", "true", False)]),
@@ -159,32 +146,32 @@ items.append(folder("11 MCP servers (:8090 ecommerce, :8091 policy)", [
 
 items.append(folder("12 Actuator health (all Spring services)", [
     req(f"{n} health", "GET", u, "/actuator/health", auth="none") for n, u in
-    [("auth", "authUrl"), ("order", "orderUrl"), ("shipment", "shipmentUrl"), ("payment", "paymentUrl"), ("inventory", "inventoryUrl"),
+    [("order", "orderUrl"), ("shipment", "shipmentUrl"), ("payment", "paymentUrl"), ("inventory", "inventoryUrl"),
      ("approval", "approvalUrl"), ("policy", "policyUrl"), ("audit", "auditUrl"), ("workflow", "workflowUrl"), ("notification", "notificationUrl")]]))
 
 items.append(folder("99 End-to-end walk-through", [
-    login("alice"), login("manny"),
     req("2. Start run (agent host)", "POST", "agentUrl", "/api/agent/runs", {"customerId": "CUST-1001", "orderId": "{{walkOrderId}}", "message": "My order {{walkOrderId}} has not arrived.", "requestId": "{{$guid}}"},
         tests=setvar("workflowId", "j.workflowId") + "\npm.test('paused for approval', () => pm.expect(j.waitingForApproval).to.eql(true));\nif (j.approvalId) pm.collectionVariables.set('approvalId', j.approvalId);"),
     req("4. Approve", "POST", "approvalUrl", "/api/approvals/{{approvalId}}/decision", {"decision": "APPROVED", "decidedBy": "manny", "comment": "ok"}, auth="manny"),
     req("5. Get run (repeat until status is COMPLETED)", "GET", "agentUrl", "/api/agent/runs/{{workflowId}}",
         tests="const j = pm.response.json();\npm.test('status ' + j.status, () => pm.expect(pm.response.code).to.eql(200));\nconsole.log(j.status, j.customerResponse);"),
     req("6. Audit trail", "GET", "auditUrl", "/api/audit/workflows/{{workflowId}}", auth="olivia"),
-], "Log in, start a run as alice, approve as manny, then poll the run (the agent host resumes by itself through Kafka). Each order can be refunded once: run postman/new_order.sh and set the `orderId` variable to the id it prints."))
+], "Start a run as alice, approve as manny, then poll the run (the agent host resumes by itself through Kafka). Each order can be refunded once: run postman/new_order.sh and set the `orderId` variable to the id it prints."))
 
 variables = {"orderUrl": "http://localhost:8081", "shipmentUrl": "http://localhost:8082", "paymentUrl": "http://localhost:8083", "inventoryUrl": "http://localhost:8084",
              "approvalUrl": "http://localhost:8085", "policyUrl": "http://localhost:8086", "auditUrl": "http://localhost:8087", "workflowUrl": "http://localhost:8088",
              "notificationUrl": "http://localhost:8089", "ecommerceMcpUrl": "http://localhost:8090", "policyMcpUrl": "http://localhost:8091", "agentUrl": "http://localhost:8092",
-             "authUrl": "http://localhost:8093", "demoPassword": "demo-pass", "walkOrderId": "ORD-8802", "svcWorkflowId": "", "tokensAt": "", "rejectApprovalId": "", "serviceToken": "local-demo-token", "customerId": "CUST-1001", "orderId": "ORD-8801",
-             "productId": "PRD-101", "accessToken": "", "workflowId": "", "approvalId": "", "reservationId": "", "refundId": "", "policyId": "", "jobId": ""}
+             "walkOrderId": "ORD-8802", "svcWorkflowId": "", "rejectApprovalId": "", "serviceToken": "local-demo-token", "customerId": "CUST-1001", "orderId": "ORD-8801",
+             "productId": "PRD-101", "workflowId": "", "approvalId": "", "reservationId": "", "refundId": "", "policyId": "", "jobId": ""}
 
 collection = {
     "info": {"_postman_id": str(uuid.uuid4()), "name": "Ecommerce Multi-Agent Order Recovery Platform",
-             "description": "Every REST endpoint of every service. 1) Run '00 Auth > Login as ...', 2) pick the active user, 3) run requests. "
-                            "'internal' requests use X-Service-Token (trusted platform calls); end users use the Bearer JWT. Or run '99 End-to-end walk-through'.",
+             "description": "Every REST endpoint of every service. Each request sends X-Service-Token plus the customer / roles it acts for "
+                            "(X-Customer-Id, X-Roles). Run the folders in order, or run '99 End-to-end walk-through'.",
              "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
-    "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{token_alice}}", "type": "string"}]},
-    "event": [{"listen": "prerequest", "script": {"type": "text/javascript", "exec": ["const cv = pm.collectionVariables;", "if (!cv.get('svcWorkflowId')) cv.set('svcWorkflowId', 'WF-PM' + Math.random().toString(16).slice(2, 10).toUpperCase());", "// Tokens live 15 minutes: log everyone in again when they are missing or older than 10 minutes.", "const age = Date.now() - Number(cv.get('tokensAt') || 0);", "if (pm.info.requestName.indexOf('Login') !== 0 && (age > 600000 || !cv.get('token_alice'))) {", "  cv.set('tokensAt', String(Date.now()));", "  ['alice', 'bob', 'olivia', 'manny', 'admin'].forEach(u => pm.sendRequest({", "    url: pm.variables.get('authUrl') + '/api/auth/token', method: 'POST', header: {'Content-Type': 'application/json'},", "    body: {mode: 'raw', raw: JSON.stringify({username: u, password: pm.variables.get('demoPassword')})}", "  }, (err, res) => { if (!err && res.code === 200) cv.set('token_' + u, res.json().accessToken); }));", "}"]}}],
+    "event": [{"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
+        "const cv = pm.collectionVariables;",
+        "if (!cv.get('svcWorkflowId')) cv.set('svcWorkflowId', 'WF-PM' + Math.random().toString(16).slice(2, 10).toUpperCase());"]}}],
     "variable": [{"key": k, "value": v} for k, v in variables.items()],
     "item": items,
 }

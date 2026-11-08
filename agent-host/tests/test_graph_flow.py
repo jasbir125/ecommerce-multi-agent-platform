@@ -209,7 +209,7 @@ async def test_every_tool_call_a_step_makes_is_recorded_in_that_steps_trace(env)
 
     class RecordingGateway(FakeGateway):
         async def call(self, name, args):
-            from app.observability.context import CURRENT_NODE
+            from app.observability.logctx import CURRENT_NODE
             out = await super().call(name, args)
             self.call_log.append({"node": CURRENT_NODE.get(), "tool": name, "ok": True, "error": None})
             return out

@@ -41,7 +41,7 @@ class RequestLogFilterTest {
             @Override
             public void doFilter(jakarta.servlet.ServletRequest request, jakarta.servlet.ServletResponse response) throws java.io.IOException {
                 request.getInputStream().readAllBytes();              // the controller reads the body
-                request.setAttribute(RequestLogFilter.ATTR_CALLER, new Caller("CUST-1001", Set.of("CUSTOMER"), "ignored", true, "alice"));
+                request.setAttribute(RequestLogFilter.ATTR_CALLER, new Caller("CUST-1001", Set.of("CUSTOMER"), "ignored"));
                 response.setContentType("application/json");
                 response.getWriter().write("{\"workflowId\":\"WF-ABC123\",\"status\":\"STARTED\",\"token\":\"secret-value\"}");
             }
@@ -63,7 +63,7 @@ class RequestLogFilterTest {
         assertTrue(lines.get(0).startsWith("-> POST /api/workflows") && lines.get(0).contains("corr=corr-123"));
         String out = lines.get(1);
         assertTrue(out.startsWith("<- POST /api/workflows  200"), out);
-        assertTrue(out.contains("caller=jwt:alice(CUST-1001)[CUSTOMER]"), out);
+        assertTrue(out.contains("caller=customer=CUST-1001[CUSTOMER]"), out);
         assertTrue(out.contains("corr=corr-123") && out.contains("wf=WF-ABC123"), out);
         assertTrue(out.contains("ORD-1") && out.contains("STARTED"), out);
         assertTrue(!out.contains("secret-value") && !out.contains("\"pw\""), out);

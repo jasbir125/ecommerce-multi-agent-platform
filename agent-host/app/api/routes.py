@@ -29,7 +29,7 @@ def to_http(e: RunError) -> HTTPException:
 
 @router.post("/runs")
 async def start_run(body: StartRunRequest, stream: bool = False, runner: RunManager = Depends(runner_of), who: Principal = Depends(authenticate)):
-    if (who.customer or who.via_jwt) and who.customer != body.customer_id:
+    if who.customer and who.customer != body.customer_id:
         raise HTTPException(403, "customerId does not match the authenticated customer")
     args = dict(customer_id=body.customer_id, order_id=body.order_id, message=body.message,
                 workflow_id=body.workflow_id, request_id=body.request_id)
@@ -109,7 +109,7 @@ async def ask_policy(body: AskPolicyRequest, request: Request, who: Principal = 
 
     runner: RunManager = request.app.state.runner
     settings = request.app.state.settings
-    customer = who.customer or who.subject or "SYSTEM"
+    customer = who.customer or "SYSTEM"
     if not runner.ask_limiter.allow(customer):
         raise HTTPException(429, {"code": "RATE_LIMITED", "message": "Too many policy questions; try again in a minute"})
     usage = UsageTracker(settings.run_token_budget)

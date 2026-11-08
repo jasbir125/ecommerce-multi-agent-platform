@@ -2,9 +2,6 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
-rule_files:
-  - /etc/prometheus/alerts.yml
-
 scrape_configs:
   # Spring Boot services: Micrometer via Actuator
   - job_name: spring-boot-services
@@ -20,7 +17,6 @@ scrape_configs:
           - audit-service:8087
           - workflow-service:8088
           - notification-service:8089
-          - auth-service:8093
 
   # Python services: agent host (agents, models, tools, RAG) and the two MCP servers
   - job_name: agent-host

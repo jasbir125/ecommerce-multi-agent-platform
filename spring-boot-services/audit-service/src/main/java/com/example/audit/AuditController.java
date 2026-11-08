@@ -21,13 +21,11 @@ public class AuditController {
     @PostMapping("/events")
     @ResponseStatus(HttpStatus.CREATED)
     public Map<String, Object> append(@Valid @RequestBody AuditEventRequest request) {
-        CallerHolder.requireInternal();
         return Map.of("id", service.append(request));
     }
 
     @GetMapping("/workflows/{workflowId}")
     public List<AuditEvent> forWorkflow(@PathVariable String workflowId) {
-        CallerHolder.requireStaffIfUser("OPERATOR", "ADMIN");
         return service.forWorkflow(workflowId);
     }
 }

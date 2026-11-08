@@ -25,7 +25,7 @@ import org.springframework.web.util.ContentCachingResponseWrapper;
  * One "in" line and one "out" line for every API call, so a request can be followed through every service.
  *
  * <pre>
- *   -> POST /api/approvals/APR-1/decision  caller=jwt:manny[MANAGER,OPERATOR] corr=... wf=WF-...
+ *   -> POST /api/approvals/APR-1/decision  caller=customer=null[MANAGER, OPERATOR] corr=... wf=WF-...
  *   <- POST /api/approvals/APR-1/decision  200 18ms  req={...} resp={...}
  * </pre>
  *
@@ -150,8 +150,6 @@ public class RequestLogFilter extends OncePerRequestFilter {
             return "anonymous";
         }
         String roles = caller.roles().isEmpty() ? "" : caller.roles().stream().sorted().toList().toString();
-        return caller.jwt()
-                ? "jwt:" + caller.subject() + "(" + caller.customerId() + ")" + roles
-                : "service(customer=" + caller.customerId() + ")" + roles;
+        return "customer=" + caller.customerId() + roles;
     }
 }

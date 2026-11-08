@@ -112,7 +112,6 @@ public class WorkflowService {
      * is a no-op. A stale read (another writer got there first) returns 409.
      */
     public Workflow resume(String workflowId, ResumeRequest req) {
-        CallerHolder.requireInternal();                       // only the agent host may move a workflow; an end-user token cannot
         CallerHolder.requireRole("OPERATOR", "ADMIN", "AGENT");
         Workflow w = get(workflowId);
         return applyTransition(w, req.idempotencyKey(), req.targetStatus().toUpperCase(), req.statePatch(), req.reason());

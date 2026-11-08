@@ -21,12 +21,12 @@ Private subnets (2 AZs), ECS Fargate, service discovery  <service>.recovery.inte
         |-> RDS PostgreSQL 16 (pgvector)      encrypted, private
         |-> ElastiCache Redis 7               private
         |-> MSK (Kafka 3.6)                   private, topics auto-created (3 partitions)
-        |-> Secrets Manager                   service token, DB password, JWT signing key, demo password, OpenAI key
+        |-> Secrets Manager                   service token, DB password, OpenAI key
         |-> Bedrock (agent-host only)         InvokeModel/Converse on the allowed models + ApplyGuardrail
 CloudWatch Logs (per service), Container Insights, MSK broker logs
 ```
 
-Security shape: only the load balancer is public; tasks sit in private subnets; the data stores accept traffic only from the tasks' security group; every secret comes from Secrets Manager; the agent host has a separate IAM role, the only one allowed to call Bedrock; `PLATFORM_ENV=production` makes every service refuse the demo token and require JWT verification.
+Security shape: only the load balancer is public; tasks sit in private subnets; the data stores accept traffic only from the tasks' security group; every secret comes from Secrets Manager; the agent host has a separate IAM role, the only one allowed to call Bedrock; the service token is generated (64 random characters), never the demo value.
 
 ## Steps
 
@@ -49,7 +49,7 @@ aws secretsmanager get-secret-value --secret-id "$(terraform -chdir=terraform ou
 
 Services created before their images exist keep failing until `push-images.sh` has run; after that ECS starts them (or run `aws ecs update-service --force-new-deployment`).
 
-Sign in to the UI with a demo user (alice, bob, olivia, manny, admin) and the password from Secrets Manager.
+Open the URL and pick a persona (customer / operator / manager) in the sidebar. Put the UI behind your own authentication (for example the ALB with Cognito) before sharing it.
 
 ### Changing the model
 
@@ -68,7 +68,7 @@ Local state is the default so `terraform init` works anywhere. For a team, add a
 - **Not applied by the author.** The configuration passes `terraform validate`, the schema job was tested against a local pgvector Postgres, and the Bedrock provider has unit tests, but no live AWS account was used. Expect to fix small things on the first `plan`/`apply`.
 - **OpenAI is still used for two things**: policy-service embeddings (the stored vectors are 1536-d `text-embedding-3-small`; the default `hash` embedder is offline and much weaker) and the workflow-service advisor (Spring AI, no Bedrock client wired). Set `TF_VAR_openai_api_key` and `policy_embedding_provider = "openai"`, or migrate both to Bedrock (Titan/Cohere embeddings need a re-embed because the vector size changes).
 - **Kafka is plaintext** inside private subnets, and Redis has no TLS. Move to MSK TLS + IAM or SCRAM and in-transit Redis encryption before real customer data.
-- **auth-service is a demo identity provider** (fixed demo users). Replace it with Cognito/OIDC; services only need a JWKS URL, issuer and audience.
+- **No user authentication.** Identity is carried in headers set by the front end (see `docs/security.md`). Put an authenticating gateway (ALB + Cognito/OIDC) in front before any real use.
 - **Observability**: logs and Container Insights are provisioned. The OpenTelemetry collector, Prometheus, Grafana and Jaeger of the local stack are not deployed; services still expose `/metrics` and emit W3C trace headers. Use AWS Distro for OpenTelemetry with X-Ray/CloudWatch, or Amazon Managed Prometheus/Grafana (dashboards in `infra/grafana/dashboards` import as they are).
 - Single NAT gateway and one task per service by default (cheap, not highly available): raise `desired_count`, set `single_nat_gateway = false` and `db_multi_az = true` for production.
 - Cost drivers: NAT gateway, MSK brokers, RDS, 14 Fargate tasks. Destroy test environments.

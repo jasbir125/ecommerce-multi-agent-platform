@@ -82,12 +82,6 @@ variable "msk_instance_type" {
 }
 
 # ---------------------------------------------------------------- models
-variable "platform_env" {
-  type        = string
-  default     = "production"
-  description = "production refuses demo tokens and requires JWT verification."
-}
-
 variable "bedrock_model_id" {
   type        = string
   default     = "anthropic.claude-3-5-sonnet-20241022-v2:0"
@@ -118,13 +112,6 @@ variable "policy_embedding_provider" {
   description = "openai (needs openai_api_key) or hash (offline, lexical). Existing vectors are 1536-d OpenAI embeddings: choose openai for production quality."
 }
 
-variable "demo_password" {
-  type        = string
-  default     = ""
-  sensitive   = true
-  description = "Password for the demo users of auth-service. Empty = a random one is generated (see outputs). Replace auth-service with a real IdP for production."
-}
-
 variable "log_retention_days" {
   type    = number
   default = 30
@@ -133,5 +120,5 @@ variable "log_retention_days" {
 variable "expose_apis" {
   type        = bool
   default     = false
-  description = "Also publish the auth, workflow, approval and agent-host APIs on the load balancer (for Postman/CI). Off = only the UI is public."
+  description = "Also publish the workflow, approval and agent-host APIs on the load balancer (for Postman/CI). Off = only the UI is public."
 }

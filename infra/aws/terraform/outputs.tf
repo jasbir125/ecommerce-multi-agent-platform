@@ -38,8 +38,3 @@ output "kafka_bootstrap" {
 output "bedrock_guardrail_id" {
   value = var.enable_guardrail ? aws_bedrock_guardrail.agents[0].guardrail_id : null
 }
-
-output "demo_password_secret" {
-  value       = aws_secretsmanager_secret.app["demo-password"].name
-  description = "Read the demo-user password with: aws secretsmanager get-secret-value --secret-id <this>"
-}

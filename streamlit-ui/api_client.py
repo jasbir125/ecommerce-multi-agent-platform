@@ -1,7 +1,7 @@
 """HTTP client for everything the UI talks to.
 
 Identity: the UI sends the service token plus X-Customer-Id and X-Roles for the persona chosen in the sidebar.
-This is a demo stand-in for a real login (OIDC in front of the gateway); the services enforce ownership and roles
+The services enforce ownership and roles
 themselves, so a customer persona cannot read another customer's workflow even if the UI allowed it.
 """
 from __future__ import annotations
@@ -40,7 +40,6 @@ class Identity:
     persona: str                      # customer | operator | manager
     customer_id: str | None
     name: str = "demo-user"
-    token: str | None = None          # login mode: the user's access token (the only credential the UI holds)
 
     @property
     def roles(self) -> str:
@@ -53,10 +52,6 @@ class Identity:
     @property
     def can_decide(self) -> bool:
         return self.persona == "manager"
-
-
-class SessionExpired(Exception):
-    """The access token was refused (expired or invalid): the user must sign in again."""
 
 
 class ApiError(Exception):
@@ -89,8 +84,6 @@ class ApiClient:
     # ------------------------------------------------------------- plumbing
     def _headers(self, who: Identity, corr: str | None = None) -> dict[str, str]:
         corr_h = {"X-Correlation-Id": corr or new_correlation_id()}
-        if who.token:                                  # login mode: identity comes from the signed token, nothing else is sent
-            return {"Authorization": f"Bearer {who.token}", "Content-Type": "application/json", **corr_h}
         h = {"X-Service-Token": self.cfg.service_token, "Content-Type": "application/json", **corr_h}
         if who.customer_id:
             h["X-Customer-Id"] = who.customer_id
@@ -111,22 +104,9 @@ class ApiClient:
                                                            (time.perf_counter() - t0) * 1000, cid, _safe(r.content))
         if r.status_code == 404 and ok_404:
             return None
-        if r.status_code == 401 and who.token:
-            raise SessionExpired("Your session has expired. Please sign in again.")
         if r.status_code >= 400:
             raise _error_from(r)
         return r.json() if r.content else {}
-
-    # ---------------------------------------------------------------- login
-    def login(self, username: str, password: str) -> dict:
-        """Exchange credentials for an access token (auth-service)."""
-        try:
-            r = self._http.post(f"{self.cfg.auth_url}/api/auth/token", json={"username": username, "password": password})
-        except httpx.TransportError as e:
-            raise ApiError(0, "UNREACHABLE", f"Cannot reach the sign-in service: {e.__class__.__name__}") from e
-        if r.status_code >= 400:
-            raise _error_from(r)
-        return r.json()
 
     # ------------------------------------------------------------ workflows
     def create_workflow(self, who: Identity, order_id: str, message: str, correlation_id: str | None = None) -> dict:
@@ -162,8 +142,6 @@ class ApiClient:
             with self._http.stream("POST", f"{self.cfg.agent_url}/api/agent/runs", params={"stream": "true"},
                                    headers=headers, json=body, timeout=httpx.Timeout(300.0, connect=3.0)) as r:
                 log.info("<- stream opened status=%s corr=%s", r.status_code, headers["X-Correlation-Id"])
-                if r.status_code == 401 and who.token:
-                    raise SessionExpired("Your session has expired. Please sign in again.")
                 if r.status_code >= 400:
                     r.read()
                     raise _error_from(r)
@@ -196,8 +174,7 @@ class ApiClient:
 
     def health(self) -> dict[str, bool]:
         out = {}
-        for name, url in (("auth-service", f"{self.cfg.auth_url}/actuator/health"),
-                          ("workflow-service", f"{self.cfg.workflow_url}/actuator/health"),
+        for name, url in (("workflow-service", f"{self.cfg.workflow_url}/actuator/health"),
                           ("approval-service", f"{self.cfg.approval_url}/actuator/health"),
                           ("agent-host", f"{self.cfg.agent_url}/health")):
             try:

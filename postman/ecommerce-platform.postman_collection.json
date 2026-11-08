@@ -1,19 +1,9 @@
 {
   "info": {
-    "_postman_id": "489c555c-1096-4773-9192-8725a5db3768",
+    "_postman_id": "eb1f91d7-f85b-480c-9229-0eeabde29c99",
     "name": "Ecommerce Multi-Agent Order Recovery Platform",
-    "description": "Every REST endpoint of every service. 1) Run '00 Auth > Login as ...', 2) pick the active user, 3) run requests. 'internal' requests use X-Service-Token (trusted platform calls); end users use the Bearer JWT. Or run '99 End-to-end walk-through'.",
+    "description": "Every REST endpoint of every service. Each request sends X-Service-Token plus the customer / roles it acts for (X-Customer-Id, X-Roles). Run the folders in order, or run '99 End-to-end walk-through'.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "auth": {
-    "type": "bearer",
-    "bearer": [
-      {
-        "key": "token",
-        "value": "{{token_alice}}",
-        "type": "string"
-      }
-    ]
   },
   "event": [
     {
@@ -22,16 +12,7 @@
         "type": "text/javascript",
         "exec": [
           "const cv = pm.collectionVariables;",
-          "if (!cv.get('svcWorkflowId')) cv.set('svcWorkflowId', 'WF-PM' + Math.random().toString(16).slice(2, 10).toUpperCase());",
-          "// Tokens live 15 minutes: log everyone in again when they are missing or older than 10 minutes.",
-          "const age = Date.now() - Number(cv.get('tokensAt') || 0);",
-          "if (pm.info.requestName.indexOf('Login') !== 0 && (age > 600000 || !cv.get('token_alice'))) {",
-          "  cv.set('tokensAt', String(Date.now()));",
-          "  ['alice', 'bob', 'olivia', 'manny', 'admin'].forEach(u => pm.sendRequest({",
-          "    url: pm.variables.get('authUrl') + '/api/auth/token', method: 'POST', header: {'Content-Type': 'application/json'},",
-          "    body: {mode: 'raw', raw: JSON.stringify({username: u, password: pm.variables.get('demoPassword')})}",
-          "  }, (err, res) => { if (!err && res.code === 200) cv.set('token_' + u, res.json().accessToken); }));",
-          "}"
+          "if (!cv.get('svcWorkflowId')) cv.set('svcWorkflowId', 'WF-PM' + Math.random().toString(16).slice(2, 10).toUpperCase());"
         ]
       }
     }
@@ -86,23 +67,11 @@
       "value": "http://localhost:8092"
     },
     {
-      "key": "authUrl",
-      "value": "http://localhost:8093"
-    },
-    {
-      "key": "demoPassword",
-      "value": "demo-pass"
-    },
-    {
       "key": "walkOrderId",
       "value": "ORD-8802"
     },
     {
       "key": "svcWorkflowId",
-      "value": ""
-    },
-    {
-      "key": "tokensAt",
       "value": ""
     },
     {
@@ -124,10 +93,6 @@
     {
       "key": "productId",
       "value": "PRD-101"
-    },
-    {
-      "key": "accessToken",
-      "value": ""
     },
     {
       "key": "workflowId",
@@ -156,325 +121,6 @@
   ],
   "item": [
     {
-      "name": "00 Auth (auth-service :8093)",
-      "description": "Run the five logins first (each stores token_<user>; every request below states which user it uses). Customers (alice=CUST-1001, bob=CUST-2002), operator (olivia), manager (manny), admin.",
-      "item": [
-        {
-          "name": "Login as alice",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{authUrl}}/api/auth/token",
-              "host": [
-                "{{authUrl}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "token"
-              ]
-            },
-            "description": "Issues an RS256 JWT for alice and stores it as {{token_alice}}.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"{{demoPassword}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "auth": {
-              "type": "noauth"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));",
-                  "const t = pm.response.json().accessToken;",
-                  "pm.collectionVariables.set('token_alice', t);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Login as bob",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{authUrl}}/api/auth/token",
-              "host": [
-                "{{authUrl}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "token"
-              ]
-            },
-            "description": "Issues an RS256 JWT for bob and stores it as {{token_bob}}.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"username\": \"bob\",\n  \"password\": \"{{demoPassword}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "auth": {
-              "type": "noauth"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));",
-                  "const t = pm.response.json().accessToken;",
-                  "pm.collectionVariables.set('token_bob', t);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Login as olivia",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{authUrl}}/api/auth/token",
-              "host": [
-                "{{authUrl}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "token"
-              ]
-            },
-            "description": "Issues an RS256 JWT for olivia and stores it as {{token_olivia}}.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"username\": \"olivia\",\n  \"password\": \"{{demoPassword}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "auth": {
-              "type": "noauth"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));",
-                  "const t = pm.response.json().accessToken;",
-                  "pm.collectionVariables.set('token_olivia', t);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Login as manny",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{authUrl}}/api/auth/token",
-              "host": [
-                "{{authUrl}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "token"
-              ]
-            },
-            "description": "Issues an RS256 JWT for manny and stores it as {{token_manny}}.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"username\": \"manny\",\n  \"password\": \"{{demoPassword}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "auth": {
-              "type": "noauth"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));",
-                  "const t = pm.response.json().accessToken;",
-                  "pm.collectionVariables.set('token_manny', t);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Login as admin",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{authUrl}}/api/auth/token",
-              "host": [
-                "{{authUrl}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "token"
-              ]
-            },
-            "description": "Issues an RS256 JWT for admin and stores it as {{token_admin}}.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"{{demoPassword}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "auth": {
-              "type": "noauth"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));",
-                  "const t = pm.response.json().accessToken;",
-                  "pm.collectionVariables.set('token_admin', t);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "JWKS (public keys)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{authUrl}}/.well-known/jwks.json",
-              "host": [
-                "{{authUrl}}"
-              ],
-              "path": [
-                ".well-known",
-                "jwks.json"
-              ]
-            },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
-          }
-        },
-        {
-          "name": "Login - wrong password (expect 401)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{authUrl}}/api/auth/token",
-              "host": [
-                "{{authUrl}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "token"
-              ]
-            },
-            "description": "",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"wrong\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "auth": {
-              "type": "noauth"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('rejected', () => pm.expect(pm.response.code).to.be.oneOf([401, 429]));"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
       "name": "01 Inventory (:8084)",
       "description": "",
       "item": [
@@ -482,7 +128,16 @@
           "name": "Search products",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
             "url": {
               "raw": "{{inventoryUrl}}/api/catalog/products/search",
               "host": [
@@ -524,7 +179,16 @@
           "name": "Get product stock",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
             "url": {
               "raw": "{{inventoryUrl}}/api/inventory/{{productId}}",
               "host": [
@@ -577,9 +241,6 @@
                   "language": "json"
                 }
               }
-            },
-            "auth": {
-              "type": "noauth"
             }
           },
           "event": [
@@ -623,10 +284,7 @@
                 "{{reservationId}}"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": ""
           }
         },
         {
@@ -667,9 +325,6 @@
                   "language": "json"
                 }
               }
-            },
-            "auth": {
-              "type": "noauth"
             }
           },
           "event": [
@@ -714,10 +369,7 @@
                 "release"
               ]
             },
-            "description": "Idempotent.",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": "Idempotent."
           }
         }
       ]
@@ -763,9 +415,6 @@
                   "language": "json"
                 }
               }
-            },
-            "auth": {
-              "type": "noauth"
             }
           },
           "event": [
@@ -787,7 +436,16 @@
           "name": "List approvals (status filter)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Roles",
+                "value": "MANAGER,OPERATOR"
+              }
+            ],
             "url": {
               "raw": "{{approvalUrl}}/api/approvals",
               "host": [
@@ -805,24 +463,23 @@
                 }
               ]
             },
-            "description": "Use the manager token (manny).",
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token_manny}}",
-                  "type": "string"
-                }
-              ]
-            }
+            "description": "Use the manager token (manny)."
           }
         },
         {
           "name": "Get approval",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Roles",
+                "value": "MANAGER,OPERATOR"
+              }
+            ],
             "url": {
               "raw": "{{approvalUrl}}/api/approvals/{{approvalId}}",
               "host": [
@@ -834,17 +491,7 @@
                 "{{approvalId}}"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token_manny}}",
-                  "type": "string"
-                }
-              ]
-            }
+            "description": ""
           }
         },
         {
@@ -852,6 +499,14 @@
           "request": {
             "method": "POST",
             "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Roles",
+                "value": "MANAGER,OPERATOR"
+              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
@@ -878,16 +533,6 @@
                   "language": "json"
                 }
               }
-            },
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token_manny}}",
-                  "type": "string"
-                }
-              ]
             }
           }
         },
@@ -928,9 +573,6 @@
                   "language": "json"
                 }
               }
-            },
-            "auth": {
-              "type": "noauth"
             }
           },
           "event": [
@@ -953,6 +595,14 @@
           "request": {
             "method": "POST",
             "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Roles",
+                "value": "MANAGER,OPERATOR"
+              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
@@ -979,16 +629,6 @@
                   "language": "json"
                 }
               }
-            },
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token_manny}}",
-                  "type": "string"
-                }
-              ]
             }
           }
         }
@@ -1036,9 +676,6 @@
                   "language": "json"
                 }
               }
-            },
-            "auth": {
-              "type": "noauth"
             }
           },
           "event": [
@@ -1060,7 +697,16 @@
           "name": "Get refund",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
             "url": {
               "raw": "{{paymentUrl}}/api/payments/refunds/{{refundId}}",
               "host": [
@@ -1086,7 +732,16 @@
           "name": "Get order",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
             "url": {
               "raw": "{{orderUrl}}/api/orders/{{orderId}}",
               "host": [
@@ -1105,7 +760,16 @@
           "name": "List customer orders",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
             "url": {
               "raw": "{{orderUrl}}/api/customers/{{customerId}}/orders",
               "host": [
@@ -1147,17 +811,23 @@
                 "owner"
               ]
             },
-            "description": "Internal endpoint: rejects end-user tokens; send the service token.",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": "Internal endpoint: rejects end-user tokens; send the service token."
           }
         },
         {
           "name": "Cancel order",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
             "url": {
               "raw": "{{orderUrl}}/api/orders/{{orderId}}/cancel",
               "host": [
@@ -1222,9 +892,6 @@
                   "language": "json"
                 }
               }
-            },
-            "auth": {
-              "type": "noauth"
             }
           }
         }
@@ -1238,7 +905,16 @@
           "name": "Get shipment",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
             "url": {
               "raw": "{{shipmentUrl}}/api/shipments/{{orderId}}",
               "host": [
@@ -1292,9 +968,6 @@
                   "language": "json"
                 }
               }
-            },
-            "auth": {
-              "type": "noauth"
             }
           }
         }
@@ -1309,6 +982,14 @@
           "request": {
             "method": "POST",
             "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Roles",
+                "value": "ADMIN,OPERATOR"
+              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
@@ -1341,16 +1022,6 @@
                   "language": "json"
                 }
               }
-            },
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token_admin}}",
-                  "type": "string"
-                }
-              ]
             }
           },
           "event": [
@@ -1374,6 +1045,14 @@
           "request": {
             "method": "POST",
             "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
@@ -1408,6 +1087,14 @@
             "method": "POST",
             "header": [
               {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -1439,7 +1126,16 @@
           "name": "List policies",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
             "url": {
               "raw": "{{policyUrl}}/api/policies",
               "host": [
@@ -1457,7 +1153,16 @@
           "name": "Get policy by id",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
             "url": {
               "raw": "{{policyUrl}}/api/policies/{{policyId}}",
               "host": [
@@ -1476,7 +1181,16 @@
           "name": "Get policy by key + version",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
             "url": {
               "raw": "{{policyUrl}}/api/policies/refund-policy/2",
               "host": [
@@ -1496,7 +1210,16 @@
           "name": "Get ingestion job (ADMIN)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Roles",
+                "value": "ADMIN,OPERATOR"
+              }
+            ],
             "url": {
               "raw": "{{policyUrl}}/api/policies/jobs/{{jobId}}",
               "host": [
@@ -1509,24 +1232,23 @@
                 "{{jobId}}"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token_admin}}",
-                  "type": "string"
-                }
-              ]
-            }
+            "description": ""
           }
         },
         {
           "name": "Archive policy (ADMIN)",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Roles",
+                "value": "ADMIN,OPERATOR"
+              }
+            ],
             "url": {
               "raw": "{{policyUrl}}/api/policies/{{policyId}}/archive",
               "host": [
@@ -1539,17 +1261,7 @@
                 "archive"
               ]
             },
-            "description": "Archive the policy created by Ingest.",
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token_admin}}",
-                  "type": "string"
-                }
-              ]
-            }
+            "description": "Archive the policy created by Ingest."
           }
         }
       ]
@@ -1592,9 +1304,6 @@
                   "language": "json"
                 }
               }
-            },
-            "auth": {
-              "type": "noauth"
             }
           }
         },
@@ -1602,7 +1311,16 @@
           "name": "Audit trail for workflow",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Roles",
+                "value": "OPERATOR"
+              }
+            ],
             "url": {
               "raw": "{{auditUrl}}/api/audit/workflows/{{svcWorkflowId}}",
               "host": [
@@ -1615,17 +1333,7 @@
                 "{{svcWorkflowId}}"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token_olivia}}",
-                  "type": "string"
-                }
-              ]
-            }
+            "description": ""
           }
         }
       ]
@@ -1639,6 +1347,14 @@
           "request": {
             "method": "POST",
             "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
@@ -1684,7 +1400,16 @@
           "name": "List workflows",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Roles",
+                "value": "OPERATOR"
+              }
+            ],
             "url": {
               "raw": "{{workflowUrl}}/api/workflows",
               "host": [
@@ -1702,24 +1427,23 @@
                 }
               ]
             },
-            "description": "Operator or manager token.",
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token_olivia}}",
-                  "type": "string"
-                }
-              ]
-            }
+            "description": "Operator or manager token."
           }
         },
         {
           "name": "Get workflow",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
             "url": {
               "raw": "{{workflowUrl}}/api/workflows/{{workflowId}}",
               "host": [
@@ -1738,7 +1462,16 @@
           "name": "Workflow trace (operator)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Roles",
+                "value": "OPERATOR"
+              }
+            ],
             "url": {
               "raw": "{{workflowUrl}}/api/workflows/{{workflowId}}/trace",
               "host": [
@@ -1751,24 +1484,23 @@
                 "trace"
               ]
             },
-            "description": "Audit events and Kafka events; operator token.",
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token_olivia}}",
-                  "type": "string"
-                }
-              ]
-            }
+            "description": "Audit events and Kafka events; operator token."
           }
         },
         {
           "name": "Recent Kafka events",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Roles",
+                "value": "OPERATOR"
+              }
+            ],
             "url": {
               "raw": "{{workflowUrl}}/api/workflows/events/recent",
               "host": [
@@ -1793,17 +1525,7 @@
                 }
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token_olivia}}",
-                  "type": "string"
-                }
-              ]
-            }
+            "description": ""
           }
         },
         {
@@ -1849,9 +1571,6 @@
                   "language": "json"
                 }
               }
-            },
-            "auth": {
-              "type": "noauth"
             }
           }
         },
@@ -1860,6 +1579,14 @@
           "request": {
             "method": "POST",
             "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
@@ -1893,6 +1620,14 @@
           "request": {
             "method": "POST",
             "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
@@ -1965,9 +1700,6 @@
                   "language": "json"
                 }
               }
-            },
-            "auth": {
-              "type": "noauth"
             }
           }
         },
@@ -2005,9 +1737,6 @@
                   "language": "json"
                 }
               }
-            },
-            "auth": {
-              "type": "noauth"
             }
           }
         }
@@ -2031,10 +1760,7 @@
                 "health"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": ""
           }
         },
         {
@@ -2042,6 +1768,14 @@
           "request": {
             "method": "POST",
             "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
@@ -2095,7 +1829,16 @@
           "name": "Get run",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
             "url": {
               "raw": "{{agentUrl}}/api/agent/runs/{{workflowId}}",
               "host": [
@@ -2115,7 +1858,16 @@
           "name": "Run trace",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
             "url": {
               "raw": "{{agentUrl}}/api/agent/runs/{{workflowId}}/trace",
               "host": [
@@ -2136,7 +1888,16 @@
           "name": "Resume run (after approval)",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
             "url": {
               "raw": "{{agentUrl}}/api/agent/runs/{{workflowId}}/resume",
               "host": [
@@ -2164,7 +1925,16 @@
           "name": "Admin metrics",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Roles",
+                "value": "OPERATOR"
+              }
+            ],
             "url": {
               "raw": "{{agentUrl}}/api/agent/admin/metrics",
               "host": [
@@ -2184,17 +1954,7 @@
                 }
               ]
             },
-            "description": "Operator token.",
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token_olivia}}",
-                  "type": "string"
-                }
-              ]
-            }
+            "description": "Operator token."
           }
         },
         {
@@ -2202,6 +1962,14 @@
           "request": {
             "method": "POST",
             "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
@@ -2245,10 +2013,7 @@
                 "metrics"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": ""
           }
         }
       ]
@@ -2271,10 +2036,7 @@
                 "health"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": ""
           }
         },
         {
@@ -2291,10 +2053,7 @@
                 "health"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": ""
           }
         },
         {
@@ -2311,10 +2070,7 @@
                 "metrics"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": ""
           }
         },
         {
@@ -2331,10 +2087,7 @@
                 "metrics"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": ""
           }
         }
       ]
@@ -2343,27 +2096,6 @@
       "name": "12 Actuator health (all Spring services)",
       "description": "",
       "item": [
-        {
-          "name": "auth health",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{authUrl}}/actuator/health",
-              "host": [
-                "{{authUrl}}"
-              ],
-              "path": [
-                "actuator",
-                "health"
-              ]
-            },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
-          }
-        },
         {
           "name": "order health",
           "request": {
@@ -2379,10 +2111,7 @@
                 "health"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": ""
           }
         },
         {
@@ -2400,10 +2129,7 @@
                 "health"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": ""
           }
         },
         {
@@ -2421,10 +2147,7 @@
                 "health"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": ""
           }
         },
         {
@@ -2442,10 +2165,7 @@
                 "health"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": ""
           }
         },
         {
@@ -2463,10 +2183,7 @@
                 "health"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": ""
           }
         },
         {
@@ -2484,10 +2201,7 @@
                 "health"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": ""
           }
         },
         {
@@ -2505,10 +2219,7 @@
                 "health"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": ""
           }
         },
         {
@@ -2526,10 +2237,7 @@
                 "health"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": ""
           }
         },
         {
@@ -2547,121 +2255,28 @@
                 "health"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "noauth"
-            }
+            "description": ""
           }
         }
       ]
     },
     {
       "name": "99 End-to-end walk-through",
-      "description": "Log in, start a run as alice, approve as manny, then poll the run (the agent host resumes by itself through Kafka). Each order can be refunded once: run postman/new_order.sh and set the `orderId` variable to the id it prints.",
+      "description": "Start a run as alice, approve as manny, then poll the run (the agent host resumes by itself through Kafka). Each order can be refunded once: run postman/new_order.sh and set the `orderId` variable to the id it prints.",
       "item": [
-        {
-          "name": "Login as alice",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{authUrl}}/api/auth/token",
-              "host": [
-                "{{authUrl}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "token"
-              ]
-            },
-            "description": "Issues an RS256 JWT for alice and stores it as {{token_alice}}.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"{{demoPassword}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "auth": {
-              "type": "noauth"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));",
-                  "const t = pm.response.json().accessToken;",
-                  "pm.collectionVariables.set('token_alice', t);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Login as manny",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{authUrl}}/api/auth/token",
-              "host": [
-                "{{authUrl}}"
-              ],
-              "path": [
-                "api",
-                "auth",
-                "token"
-              ]
-            },
-            "description": "Issues an RS256 JWT for manny and stores it as {{token_manny}}.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"username\": \"manny\",\n  \"password\": \"{{demoPassword}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "auth": {
-              "type": "noauth"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));",
-                  "const t = pm.response.json().accessToken;",
-                  "pm.collectionVariables.set('token_manny', t);"
-                ]
-              }
-            }
-          ]
-        },
         {
           "name": "2. Start run (agent host)",
           "request": {
             "method": "POST",
             "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
@@ -2712,6 +2327,14 @@
             "method": "POST",
             "header": [
               {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Roles",
+                "value": "MANAGER,OPERATOR"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -2737,16 +2360,6 @@
                   "language": "json"
                 }
               }
-            },
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token_manny}}",
-                  "type": "string"
-                }
-              ]
             }
           }
         },
@@ -2754,7 +2367,16 @@
           "name": "5. Get run (repeat until status is COMPLETED)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
             "url": {
               "raw": "{{agentUrl}}/api/agent/runs/{{workflowId}}",
               "host": [
@@ -2787,7 +2409,16 @@
           "name": "6. Audit trail",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Roles",
+                "value": "OPERATOR"
+              }
+            ],
             "url": {
               "raw": "{{auditUrl}}/api/audit/workflows/{{workflowId}}",
               "host": [
@@ -2800,17 +2431,7 @@
                 "{{workflowId}}"
               ]
             },
-            "description": "",
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{token_olivia}}",
-                  "type": "string"
-                }
-              ]
-            }
+            "description": ""
           }
         }
       ]

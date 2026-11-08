@@ -15,4 +15,4 @@ Each guardrail below maps to where it is implemented and what tests it.
 | Fault tolerance | partial completion, escalation | golden `partial-failure`, `missing-shipment-data` |
 | Invalid model output | schema validation and retry, safe fallback | golden `invalid-model-output`, `low-confidence-decision` |
 
-Golden scenarios are checked by `evaluation/evaluators`; `test_evaluator_catches_regressions.py` mutates each guardrail to prove the checks can fail.
+Golden scenarios are checked by `evaluation/run_golden.py` (`make eval`); the unit tests in `agent-host/tests` cover the guardrails directly.

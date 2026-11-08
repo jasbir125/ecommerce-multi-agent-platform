@@ -25,17 +25,6 @@ CREATE TABLE processed_event (
     PRIMARY KEY (consumer, event_id)
 );
 
--- Test-only fault injection (read only when platform.faults.enabled=true, which production mode refuses).
-CREATE TABLE fault_injection (
-    id         BIGSERIAL PRIMARY KEY,
-    service    VARCHAR(50)  NOT NULL,           -- order | inventory | shipment
-    operation  VARCHAR(50)  NOT NULL,           -- e.g. replacement, reserve, carrier
-    scope      VARCHAR(100) NOT NULL,           -- workflow id or order id the fault applies to
-    mode       VARCHAR(20)  NOT NULL DEFAULT 'error' CHECK (mode IN ('error','unavailable')),
-    remaining  INT          NOT NULL DEFAULT 1,
-    created_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE customer_order (
     order_id       VARCHAR(100) PRIMARY KEY,
     customer_id    VARCHAR(100) NOT NULL,

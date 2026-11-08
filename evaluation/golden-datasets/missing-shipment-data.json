@@ -56,69 +56,6 @@
    "expected_state": {
     "refund_rows": 0
    }
-  },
-  {
-   "id": "msd-carrier-down",
-   "mode": "live",
-   "description": "The carrier tracking API is unavailable (injected 503).",
-   "setup": {
-    "order": {
-     "customer": "CUST-1001",
-     "amount": 129.99,
-     "product": "PRD-100",
-     "shipment": {
-      "status": "LOST",
-      "delay_days": 5
-     }
-    },
-    "faults": [
-     {
-      "service": "shipment",
-      "operation": "carrier",
-      "scope": "order",
-      "mode": "unavailable",
-      "remaining": 8
-     }
-    ]
-   },
-   "input": {
-    "customerId": "CUST-1001",
-    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
-    "actor": "service"
-   },
-   "expected_intent": "DELAYED_ORDER_RECOVERY",
-   "expected_tools": {
-    "must_call": [],
-    "must_not_call": [
-     "initiate_refund",
-     "reserve_inventory",
-     "create_replacement_order",
-     "create_approval_request"
-    ]
-   },
-   "expected_approval_required": false,
-   "expected_final_status": "ESCALATED",
-   "expected_guardrail_behavior": {
-    "audit_events_present": [
-     "SHIPMENT_UNVERIFIED"
-    ],
-    "audit_events_absent": [],
-    "kafka_topics_present": [],
-    "message_includes": [],
-    "message_includes_any": [
-     "verify",
-     "review"
-    ],
-    "message_excludes": [],
-    "message_matches": [],
-    "message_must_not_match": [],
-    "errors_include": []
-   },
-   "expected_rag_confidence": null,
-   "expected_citations": [],
-   "expected_state": {
-    "refund_rows": 0
-   }
   }
  ]
 }

@@ -30,13 +30,13 @@ The full pipeline fixed both, because query rewriting rescued the first and the 
 13 questions is small, so add cases as real questions arrive.
 
 ## Workflow and guardrails
-Unit tests: agent-host 106, policy-service 44, MCP servers 39, Streamlit UI 48 (headless renders with `AppTest`). Live scenario scripts: `agent-host/scripts/e2e_demo.py`, `mcp-servers/scripts/smoke_test.py`, `streamlit-ui/scripts/live_smoke.py` (drives the real UI through request, approval, resume, inspection and admin).
+Unit tests: agent-host 106, policy-service 44, MCP servers 39, Streamlit UI 48 (headless renders with `AppTest`). Live scenario scripts: `mcp-servers/scripts/smoke_test.py`, `streamlit-ui/scripts/live_smoke.py` (drives the real UI through request, approval, resume, inspection and admin).
 The 14-scenario workflow datasets listed in `evaluation/golden-datasets/` are filled in Phase 7.
 
-## Golden datasets (Phase 7)
+## Golden datasets
 
-`evaluation/golden-datasets/*.json` (14 files, 29 cases) run in modes `component` (no stack), `live`, `api`, `mcp`, `rag`.
+`evaluation/golden-datasets/*.json` holds the 14 scenarios from the spec. Each case states the input, expected intent, expected tools, approval requirement, final status, guardrail behaviour, RAG confidence and citations.
 
-- `make eval-component` – fast, deterministic.
-- `make eval-golden` – real stack and model; fault injection is enabled only for the run. Set `POSTGRES_HOST_PORT` if Postgres is not on 5432.
-- `make eval-security` – security checks.
+`make eval` (`evaluation/run_golden.py`) runs them against the running stack with real model calls: it creates a fresh order, submits the request, lets a manager approve or reject, then checks the dataset's expectations (final status, tools called / never called, audit events, customer message, database rows, who may see what). Cases in mode `component`, `api` or `mcp`, and the duplicate-Kafka-event case, are skipped by the runner and covered by the unit tests in `agent-host/tests` and the service tests.
+
+The partial-failure case needs no special hook: the runner sets the replacement product's stock to 0 while the case waits for approval, so the refund succeeds and the replacement reservation fails. The runner reaches the database through `docker exec platform-postgres psql`, so the stack must run in Docker.

@@ -19,7 +19,7 @@ from app.observability.logctx import setup_logging
 from app.observability.tracing import instrument_app, setup_tracing
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from app.runner import RunManager
-from app.security import JwtVerifier, check_startup
+from app.security import check_startup
 from app.services.workflow_client import WorkflowClient
 
 setup_logging("agent-host")
@@ -72,7 +72,6 @@ async def lifespan(app: FastAPI):
         graph = build_graph(await make_checkpointer(stack, settings))
         runner = RunManager(settings, deps, graph, redis)
         app.state.settings, app.state.runner = settings, runner
-        app.state.jwt = JwtVerifier(settings.auth_jwks_url, settings.auth_issuer, settings.auth_audience) if settings.auth_jwks_url else None
         consumer = None
         if settings.agent_kafka_enabled:
             consumer = TriggerConsumer(settings.kafka_bootstrap_servers, runner)

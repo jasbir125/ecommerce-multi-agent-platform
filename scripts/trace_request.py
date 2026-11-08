@@ -7,7 +7,7 @@ Reads the logs of all running containers (`docker compose logs`), keeps the line
 other ids seen on those lines (the case's workflow id <-> its correlation ids, so the manager's approval click is included),
 sorts everything by time and prints one readable timeline:
 
-    10:15:01.226  workflow-service    INFO   <- POST /api/workflows 201 40ms caller=jwt:alice ... req={...} resp={...}
+    10:15:01.226  workflow-service    INFO   <- POST /api/workflows 201 40ms caller=customer=CUST-1001 ... req={...} resp={...}
     10:15:01.810  agent-host          INFO   AGENT > shipment received input={...}
     10:15:02.044  ecommerce-mcp       INFO   TOOL IN  get_shipment_status args={...}
 

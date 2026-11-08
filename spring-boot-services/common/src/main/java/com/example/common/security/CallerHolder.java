@@ -21,7 +21,7 @@ public final class CallerHolder {
 
     public static Caller current() {
         Caller c = CURRENT.get();
-        return c != null ? c : new Caller(null, java.util.Set.of(), null, false, null);
+        return c != null ? c : new Caller(null, java.util.Set.of(), null);
     }
 
     /** The customer this request acts for; fails with 401 if none was supplied. */
@@ -31,20 +31,6 @@ public final class CallerHolder {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "CUSTOMER_REQUIRED", "X-Customer-Id header is required");
         }
         return id;
-    }
-
-    /** Endpoints that only trusted platform components may call (an end user's token is refused). */
-    public static void requireInternal() {
-        if (current().jwt()) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "INTERNAL_ONLY", "This endpoint is not available to end users");
-        }
-    }
-
-    /** End users need one of these roles; trusted platform components pass. */
-    public static void requireStaffIfUser(String... anyOf) {
-        if (current().jwt()) {
-            requireRole(anyOf);
-        }
     }
 
     public static void requireRole(String... anyOf) {

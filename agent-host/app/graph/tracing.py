@@ -12,7 +12,6 @@ from langgraph.errors import GraphBubbleUp
 from app.graph.deps import deps_of
 from app.llm import BudgetExceeded
 from app.observability import logctx, metrics as m
-from app.observability.context import CURRENT_NODE
 from app.observability.tracing import span
 
 log = logging.getLogger("agent.graph")
@@ -42,7 +41,7 @@ def traced(name: str):
             ctx = deps.runs.get(state.workflow_id)
             calls_before = len(ctx.tool_log) if ctx else 0
             gateway_before = len(getattr(ctx.gateway, "call_log", [])) if ctx else 0
-            node_token = CURRENT_NODE.set(name)
+            node_token = logctx.CURRENT_NODE.set(name)
             log_tokens = logctx.bind(agent=name, workflow_id=state.workflow_id, customer_id=state.customer_id,
                                      correlation_id=state.correlation_id or None)
             started = datetime.now(timezone.utc)
@@ -65,7 +64,7 @@ def traced(name: str):
             entry["retries"] = update.pop("_retries", 0)
             entry["detail"] = update.pop("_detail", "")
             update.pop("_tool_errors", None)
-            CURRENT_NODE.reset(node_token)
+            logctx.CURRENT_NODE.reset(node_token)
             m.NODE_RESULTS.labels(name, entry["status"]).inc()
             m.NODE_DURATION.labels(name).observe(time.perf_counter() - t0)
             if entry["retries"]:

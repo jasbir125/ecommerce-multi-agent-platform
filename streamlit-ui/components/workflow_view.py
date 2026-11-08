@@ -4,7 +4,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from api_client import ApiError, Identity, SessionExpired
+from api_client import ApiError, Identity
 from components import kafka_event_viewer, rag_evidence, trace_viewer, workflow_timeline
 from data import audit_rows, icon, is_terminal, timeline_rows
 
@@ -30,12 +30,6 @@ def render(api, who: Identity, workflow_id: str, key: str = "wf") -> None:
 def _body(api, who: Identity, workflow_id: str, key: str) -> None:
     try:
         data = load(api, who, workflow_id)
-    except SessionExpired:
-        # This fragment refreshes on its own timer, outside the page's error handling: sign the user out here.
-        st.session_state.pop("auth", None)
-        st.session_state["login_notice"] = "Your session expired. Please sign in again."
-        st.rerun(scope="app")
-        return
     except ApiError as e:
         st.error(f"Cannot open {workflow_id}: {e}")
         return

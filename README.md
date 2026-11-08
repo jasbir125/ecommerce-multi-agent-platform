@@ -4,7 +4,7 @@ An enterprise-grade Multi-Agent Ecommerce Order Recovery Platform. Demo workflow
 
 > **Core rule:** the model can suggest an action, but only authorized application code and domain services can execute it.
 
-**Status: Phase 8 complete (all phases done).** Infrastructure, the nine Spring Boot services, the two FastMCP servers, the LangGraph agent host, a production-grade policy RAG and the Streamlit operations UI are implemented and tested end to end. JWT auth, guardrails, observability (Jaeger, Prometheus, Grafana) and golden-dataset evaluation (Phase 7) are in place; AWS deployment (Terraform for ECS/Fargate, Bedrock model + guardrail) is in `infra/aws`.
+**Status: Phase 8 complete (all phases done).** Infrastructure, the nine Spring Boot services, the two FastMCP servers, the LangGraph agent host, a production-grade policy RAG and the Streamlit operations UI are implemented and tested end to end. Guardrails, observability (Jaeger, Prometheus, Grafana) and golden-dataset evaluation (Phase 7) are in place; AWS deployment (Terraform for ECS/Fargate, Bedrock model + guardrail) is in `infra/aws`.
 
 ## Layout
 
@@ -15,7 +15,7 @@ An enterprise-grade Multi-Agent Ecommerce Order Recovery Platform. Demo workflow
 | `mcp-servers/` | Python FastMCP servers (ecommerce, policy) |
 | `streamlit-ui/` | Internal demo / ops UI |
 | `infra/` | Postgres `init.sql`, Kafka topics, OTel, Prometheus, Grafana, Redis, AWS docs |
-| `evaluation/` | Golden datasets (14 scenarios), evaluators, reports |
+| `evaluation/` | Golden datasets (14 scenarios), a runner (`make eval`), RAG quality evaluation |
 | `docs/` | Architecture, API contracts, security, RAG, evaluation, demo script |
 
 ## Prerequisites
@@ -66,7 +66,6 @@ python mcp-servers/scripts/smoke_test.py                          # live end-to-
 # agent host (separate venv: it needs a different `mcp` version than fastmcp)
 uv venv --python 3.12 .venv-agent && uv pip install --python .venv-agent/bin/python -r agent-host/requirements-dev.txt
 cd agent-host && ../.venv-agent/bin/python -m pytest -q                       # 40 tests
-python agent-host/scripts/e2e_demo.py                             # live scenario with real model calls
 ```
 See `mcp-servers/README.md` for the tool list and security model.
 
@@ -131,7 +130,7 @@ The full 12-step script is in `docs/demo-script.md`.
 4. **Phase 4** — LangGraph agent host (supervisor + specialists) ✅
 5. **Phase 5** — Production RAG (pgvector, hybrid retrieval, reranking, caching, grounding, citations) ✅
 6. **Phase 6** — Streamlit UI ✅
-7. **Phase 7** — Guardrails, security, observability, evaluation ✅ (auth-service :8093, Jaeger :16686, Grafana dashboards; see `docs/guardrails.md`, `docs/observability.md`; `make eval-golden`, `make eval-security`)
+7. **Phase 7** — Guardrails, security, observability, evaluation ✅ (Jaeger :16686, Grafana :3000; see `docs/guardrails.md`, `docs/observability.md`; `make eval`)
 8. **Phase 8** — AWS: Bedrock provider, Terraform (ECS/Fargate, RDS, ElastiCache, MSK, Secrets Manager, guardrail) ✅ validated, not applied to a live account; see `infra/aws/deployment.md`
 7. Guardrails, security, observability, evaluation datasets
 8. AWS Bedrock deployment docs and configuration

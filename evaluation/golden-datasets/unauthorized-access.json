@@ -20,7 +20,7 @@
    "input": {
     "customerId": "CUST-1001",
     "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
-    "actor": "jwt:bob"
+    "actor": "bob"
    },
    "expected_intent": null,
    "expected_tools": {
@@ -95,17 +95,17 @@
    "expected_citations": [],
    "access_denials": [
     {
-     "actor": "jwt:bob",
+     "actor": "bob",
      "resource": "workflow",
      "status": 403
     },
     {
-     "actor": "jwt:bob",
+     "actor": "bob",
      "resource": "run",
      "status": 403
     },
     {
-     "actor": "jwt:bob",
+     "actor": "bob",
      "resource": "trace",
      "status": 403
     }

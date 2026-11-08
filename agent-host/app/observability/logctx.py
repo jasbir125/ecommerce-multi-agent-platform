@@ -29,6 +29,8 @@ correlation_id: ContextVar[str | None] = ContextVar("correlation_id", default=No
 workflow_id: ContextVar[str | None] = ContextVar("workflow_id", default=None)
 customer_id: ContextVar[str | None] = ContextVar("customer_id", default=None)
 agent: ContextVar[str | None] = ContextVar("agent", default=None)
+# Name of the graph step the current task is running (each parallel step runs in its own task).
+CURRENT_NODE: ContextVar[str | None] = ContextVar("current_node", default=None)
 _VARS = {"correlation_id": correlation_id, "workflow_id": workflow_id, "customer_id": customer_id, "agent": agent}
 # Ids learned while a request is being handled (the customer after login, the workflow after it is created) are also
 # written here, because code running in a child task cannot change the parent's context variables.

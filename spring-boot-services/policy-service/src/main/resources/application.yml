@@ -53,14 +53,7 @@ spring:
 platform:
   service-token: ${PLATFORM_SERVICE_TOKEN:${MCP_SERVICE_TOKEN:local-demo-token}}
   security-enabled: true
-  faults:
-    enabled: ${PLATFORM_FAULTS_ENABLED:false}
   max-body-bytes: 1048576
-  env: ${PLATFORM_ENV:dev}
-  jwt:
-    jwks-url: ${PLATFORM_JWT_JWKS_URL:}
-    issuer: ${PLATFORM_JWT_ISSUER:order-recovery-auth}
-    audience: ${PLATFORM_JWT_AUDIENCE:order-recovery-api}
   audit-service-url: ${PLATFORM_AUDIT_SERVICE_URL:http://localhost:8087}
 
 policy:

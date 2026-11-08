@@ -21,7 +21,7 @@ def render(api, who: Identity) -> None:
         if not pending:
             st.success("Nothing waiting for approval.")
         if not who.can_decide and pending:
-            st.info("Sign in as a **manager** (sidebar) to approve or reject.")
+            st.info("Switch to the **Manager** persona (sidebar) to approve or reject.")
         for a in pending:
             _card(api, who, a)
     with decided_tab:

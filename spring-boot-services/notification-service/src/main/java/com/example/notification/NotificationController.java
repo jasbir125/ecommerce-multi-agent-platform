@@ -17,13 +17,11 @@ public class NotificationController {
 
     @PostMapping("/customer")
     public Result customer(@Valid @RequestBody CustomerNotification request) {
-        CallerHolder.requireInternal();
         return service.sendToCustomer(request);
     }
 
     @PostMapping("/internal")
     public Result internal(@Valid @RequestBody InternalNotification request) {
-        CallerHolder.requireInternal();
         return service.sendInternal(request);
     }
 }
