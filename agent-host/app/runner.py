@@ -12,6 +12,7 @@ from app.config import Settings
 from app.graph.deps import Deps
 from app.guardrails.input_guardrails import RunRateLimiter
 from app.models.workflow_state import WorkflowState
+from app.observability import metrics as m
 
 log = logging.getLogger("agent.runner")
 TERMINAL = {"COMPLETED", "PARTIALLY_COMPLETED", "REJECTED", "ESCALATED", "FAILED"}
@@ -44,6 +45,7 @@ class RunManager:
     def __init__(self, settings: Settings, deps: Deps, graph, redis=None):
         self.s, self.deps, self.graph, self.redis = settings, deps, graph, redis
         self._local_locks: set[str] = set()
+        self._paused: set[str] = set()          # runs counted in the waiting-for-approval gauge
         self.limiter = RunRateLimiter(settings.runs_per_minute_per_customer)
         self.ask_limiter = RunRateLimiter(settings.rag_ask_per_minute)
 
@@ -140,6 +142,9 @@ class RunManager:
             raise RunError(409, "RUN_IN_PROGRESS", "This workflow is already being processed")
         try:
             v = snap.values
+            if workflow_id in self._paused:
+                self._paused.discard(workflow_id)
+                m.WORKFLOWS_WAITING.dec()
             cfg = self._config(workflow_id, v["customer_id"], v["order_id"])
             async for ev in self._drive(Command(resume="decided"), cfg):
                 yield ev
@@ -165,15 +170,36 @@ class RunManager:
                 yield {"event": "node", "node": node, "trace": entry}
         snap = await self.snapshot(wf)
         run = summarize(snap.values, snap.next)
+        if run["waitingForApproval"] and wf not in self._paused:
+            self._paused.add(wf)
+            m.WORKFLOWS_WAITING.inc()
         if not snap.next:
             await self._finish(wf, snap)
         yield {"event": "final", "run": run}
 
     async def _finish(self, workflow_id: str, snap) -> None:
+        self._record_outcome(workflow_id, snap.values)
         ctx = self.deps.runs.get(workflow_id)
         if self.deps.evaluator:
             await self.deps.evaluator.record(WorkflowState(**snap.values), ctx.usage.summary() if ctx else {})
         self.deps.release(workflow_id)
+
+    def _record_outcome(self, workflow_id: str, values: dict[str, Any]) -> None:
+        """Workflow success rate and latency: end to end (incl. waiting for a human) and active (agents and code only)."""
+        from datetime import datetime, timezone
+        status = values.get("status", "UNKNOWN")
+        m.WORKFLOW_RUNS.labels(status).inc()
+        if workflow_id in self._paused:
+            self._paused.discard(workflow_id)
+            m.WORKFLOWS_WAITING.dec()
+        trace = values.get("trace", [])
+        if trace:
+            try:
+                started = datetime.fromisoformat(trace[0]["started_at"])
+                m.WORKFLOW_E2E.labels(status).observe((datetime.now(timezone.utc) - started).total_seconds())
+            except (KeyError, ValueError):
+                pass
+            m.WORKFLOW_ACTIVE.labels(status).observe(sum(t.get("latency_ms", 0) for t in trace if t.get("agent") != "approval_wait") / 1000)
 
     # --------------------------------------------------------------------- read
     async def get(self, workflow_id: str) -> dict:

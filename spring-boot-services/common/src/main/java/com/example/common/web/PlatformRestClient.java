@@ -19,16 +19,19 @@ import org.springframework.web.client.RestClient;
 public class PlatformRestClient {
 
     private final PlatformProperties props;
+    private final org.springframework.web.client.RestClient.Builder builder;
 
-    public PlatformRestClient(PlatformProperties props) {
+    /** The auto-configured builder carries Micrometer observation, so trace context flows to the called service. */
+    public PlatformRestClient(PlatformProperties props, org.springframework.web.client.RestClient.Builder builder) {
         this.props = props;
+        this.builder = builder;
     }
 
     public RestClient forBaseUrl(String baseUrl) {
         var settings = ClientHttpRequestFactorySettings.DEFAULTS
                 .withConnectTimeout(Duration.ofSeconds(2))
                 .withReadTimeout(Duration.ofSeconds(5));
-        return RestClient.builder()
+        return builder.clone()
                 .baseUrl(baseUrl)
                 .requestFactory(ClientHttpRequestFactories.get(settings))
                 .requestInterceptor((request, body, execution) -> {

@@ -4,7 +4,7 @@ An enterprise-grade Multi-Agent Ecommerce Order Recovery Platform. Demo workflow
 
 > **Core rule:** the model can suggest an action, but only authorized application code and domain services can execute it.
 
-**Status: Phase 6 complete.** Infrastructure, the nine Spring Boot services, the two FastMCP servers, the LangGraph agent host, a production-grade policy RAG and the Streamlit operations UI are implemented and tested end to end. Guardrail/evaluation datasets (Phase 7) and Bedrock deployment (Phase 8) remain.
+**Status: Phase 7 complete.** Infrastructure, the nine Spring Boot services, the two FastMCP servers, the LangGraph agent host, a production-grade policy RAG and the Streamlit operations UI are implemented and tested end to end. JWT auth, guardrails, observability (Jaeger, Prometheus, Grafana) and golden-dataset evaluation (Phase 7) are in place; Bedrock deployment (Phase 8) remains.
 
 ## Layout
 
@@ -131,6 +131,7 @@ The full 12-step script is in `docs/demo-script.md`.
 4. **Phase 4** — LangGraph agent host (supervisor + specialists) ✅
 5. **Phase 5** — Production RAG (pgvector, hybrid retrieval, reranking, caching, grounding, citations) ✅
 6. **Phase 6** — Streamlit UI ✅
+7. **Phase 7** — Guardrails, security, observability, evaluation ✅ (auth-service :8093, Jaeger :16686, Grafana dashboards; see `docs/guardrails.md`, `docs/observability.md`; `make eval-golden`, `make eval-security`)
 7. Guardrails, security, observability, evaluation datasets
 8. AWS Bedrock deployment docs and configuration
 

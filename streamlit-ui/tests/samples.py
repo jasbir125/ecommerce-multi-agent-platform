@@ -93,7 +93,7 @@ class FakeApi:
         if name in self.fail:
             raise ApiError(503, "DOWN", f"{name} is down")
 
-    def health(self): return {"workflow-service": True, "approval-service": True, "agent-host": False}
+    def health(self): return {"auth-service": True, "workflow-service": True, "approval-service": True, "agent-host": False}
     def create_workflow(self, who, order, msg): self._maybe_fail("create_workflow"); return {"workflowId": "WF-QUEUED0001"}
     def get_workflow(self, who, wf): self._maybe_fail("get_workflow"); return WORKFLOW
     def list_workflows(self, who, status=None): self._maybe_fail("list_workflows"); return [WORKFLOW]
@@ -116,3 +116,21 @@ class FakeApi:
         yield {"event": "node", "node": "order", "trace": TRACE[2]}
         yield {"event": "interrupt", "waitingFor": "approval"}
         yield {"event": "final", "run": RUN}
+
+
+def login_response(username):
+    users = {"alice": ("CUST-1001", ["CUSTOMER"]), "bob": ("CUST-2002", ["CUSTOMER"]), "olivia": ("", ["OPERATOR"]), "manny": ("", ["MANAGER", "OPERATOR"])}
+    if username not in users:
+        raise ApiError(401, "INVALID_CREDENTIALS", "Invalid username or password")
+    cid, roles = users[username]
+    return {"accessToken": f"tok-{username}", "tokenType": "Bearer", "expiresIn": 900, "username": username, "customerId": cid, "roles": roles}
+
+
+def _login(self, username, password):
+    self.calls.append(("login", username))
+    if password != "demo-pass":
+        raise ApiError(401, "INVALID_CREDENTIALS", "Invalid username or password")
+    return login_response(username)
+
+
+FakeApi.login = _login

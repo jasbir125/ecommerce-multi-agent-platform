@@ -1,12 +1,71 @@
 {
-  "name": "approval-rejection",
-  "status": "TODO - populated in Phase 7",
-  "input": {},
-  "expected_intent": null,
-  "expected_tools": [],
-  "expected_approval_required": null,
-  "expected_final_status": null,
-  "expected_guardrail_behavior": null,
-  "expected_rag_confidence": null,
-  "expected_citations": []
+ "scenario": "approval-rejection",
+ "description": "A manager rejects the proposed refund: nothing may be executed and the customer is told it needs manual review.",
+ "cases": [
+  {
+   "id": "ar-rejected",
+   "mode": "live",
+   "description": "Lost shipment, manager rejects.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 129.99,
+     "product": "PRD-100",
+     "shipment": {
+      "status": "LOST",
+      "delay_days": 5
+     }
+    },
+    "approval": "REJECT"
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [
+     "create_approval_request",
+     "notify_customer"
+    ],
+    "must_not_call": [
+     "initiate_refund",
+     "reserve_inventory",
+     "create_replacement_order",
+     "create_carrier_case"
+    ]
+   },
+   "expected_approval_required": true,
+   "expected_final_status": "REJECTED",
+   "expected_guardrail_behavior": {
+    "audit_events_present": [
+     "APPROVAL_REJECTED"
+    ],
+    "audit_events_absent": [
+     "REFUND_INITIATED",
+     "INVENTORY_RESERVED",
+     "REPLACEMENT_ORDER_CREATED"
+    ],
+    "kafka_topics_present": [],
+    "message_includes": [],
+    "message_includes_any": [
+     "review",
+     "support"
+    ],
+    "message_excludes": [
+     "has been initiated",
+     "has been created"
+    ],
+    "message_matches": [],
+    "message_must_not_match": [],
+    "errors_include": []
+   },
+   "expected_rag_confidence": null,
+   "expected_citations": [],
+   "expected_state": {
+    "refund_rows": 0
+   }
+  }
+ ]
 }

@@ -66,4 +66,4 @@ def register(mcp: FastMCP, deps: Deps) -> None:
         """Get the real status of an approval request. Approval status must come from here, never from memory."""
         a = await c.approvals.get(f"/api/approvals/{approval_id}")
         return {k: a.get(k) for k in ("approvalId", "workflowId", "status", "requestedAction", "amount",
-                                      "riskLevel", "expiresAt", "decidedBy")}
+                                      "riskLevel", "expiresAt", "decidedBy", "createdAt", "decidedAt")}

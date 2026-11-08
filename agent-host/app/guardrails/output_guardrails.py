@@ -59,10 +59,18 @@ _REPLACEMENT_CLAIM = re.compile(r"replacement[^.]*\b(created|placed|confirmed|on
 _IDS = re.compile(r"\b(?:RF|ORD|RSV|APR|CC)-[A-Z0-9]{6,}\b")
 
 
+# We never know a delivery date: carriers lose parcels. The customer text must not promise one.
+_DELIVERY_PROMISE = re.compile(
+    r"\b(will|should|is expected to|are expected to|going to|shall)\b[^.]{0,40}\b(arrive|be delivered|deliver|be shipped|ship|dispatch|reach you)\b"
+    r"|\b(delivery|arrival|dispatch|shipping) (date|time|estimate|window|eta)\b|\beta\b"
+    r"|\b(arrive|arrives|delivered|delivery|shipped|dispatched)\b[^.]{0,30}\b(by|on|within|before|in)\s+(\d|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next|the end|a few|two|three|four|five|seven)",
+    re.I)
+_APPROVAL_CLAIM = re.compile(r"\b(approved|approval (was|has been|is) (granted|given|complete|completed))\b", re.I)
 _HUMAN_FOLLOW_UP = re.compile(r"support (agent|team)[^.]*\b(follow|contact|review)|manual review|will (contact|reach out)", re.I)
 
 
-def response_violations(text: str, execution: ExecutionResult | None, order_id: str, status: str | None = None) -> list[str]:
+def response_violations(text: str, execution: ExecutionResult | None, order_id: str, status: str | None = None,
+                        approval_status: str | None = None) -> list[str]:
     """The customer message may only state results a service actually returned, must state the ones that are verified,
     and must not contradict the outcome (for example promising human follow-up when everything completed)."""
     v: list[str] = []
@@ -73,6 +81,10 @@ def response_violations(text: str, execution: ExecutionResult | None, order_id: 
         v.append("MISSING_REPLACEMENT_ID")
     if status == "COMPLETED" and _HUMAN_FOLLOW_UP.search(text):
         v.append("CONTRADICTS_OUTCOME")
+    if _DELIVERY_PROMISE.search(text):
+        v.append("UNSUPPORTED_DELIVERY_PROMISE")
+    if _APPROVAL_CLAIM.search(text) and approval_status != "APPROVED":
+        v.append("UNVERIFIED_APPROVAL_CLAIM")
     if _REFUND_CLAIM.search(text) and ex.refund_status not in ("INITIATED", "COMPLETED"):
         v.append("UNVERIFIED_REFUND_CLAIM")
     if _REPLACEMENT_CLAIM.search(text) and not ex.replacement_order_id:

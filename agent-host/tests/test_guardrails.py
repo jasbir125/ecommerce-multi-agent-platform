@@ -159,3 +159,42 @@ def test_a_complete_accurate_message_passes():
 
 def test_human_follow_up_is_fine_when_the_case_was_escalated():
     assert response_violations("A support agent will follow up on your request.", None, "ORD-7842", "ESCALATED") == []
+
+
+# ------------------------------------------------- delivery promises and approval claims
+@pytest.mark.parametrize("text", [
+    "Your replacement will arrive on Friday.",
+    "The replacement should be delivered within 3 days.",
+    "We expect delivery by tomorrow.",
+    "Your new delivery date is next Monday.",
+    "The ETA is two days.",
+    "It is going to ship today and arrives in 5 days.",
+    "Your parcel will be delivered by the end of the week.",
+])
+def test_delivery_promises_are_rejected(text):
+    assert "UNSUPPORTED_DELIVERY_PROMISE" in response_violations(text, None, "ORD-7842", "ESCALATED")
+
+
+@pytest.mark.parametrize("text", [
+    "Your request needs a manual review. Our support team will contact you.",
+    "Your refund RF-ABC1234567 has been initiated.",
+    "Refunds reach your card within 5 to 7 business days.",
+    "We could not verify the shipment status right now.",
+])
+def test_ordinary_messages_are_not_mistaken_for_delivery_promises(text):
+    assert "UNSUPPORTED_DELIVERY_PROMISE" not in response_violations(text, ExecutionResult(refund_id="RF-ABC1234567", refund_status="INITIATED"), "ORD-7842", "COMPLETED")
+
+
+def test_saying_approved_without_a_real_approval_is_rejected():
+    assert "UNVERIFIED_APPROVAL_CLAIM" in response_violations("Good news, your request was approved.", None, "ORD-7842", "ESCALATED", "PENDING")
+    assert "UNVERIFIED_APPROVAL_CLAIM" in response_violations("Your refund has been approved.", None, "ORD-7842", "REJECTED", "REJECTED")
+    assert "UNVERIFIED_APPROVAL_CLAIM" not in response_violations("Your request was approved by a manager.", None, "ORD-7842", "COMPLETED", "APPROVED")
+    assert "UNVERIFIED_APPROVAL_CLAIM" not in response_violations("Your request needs approval first.", None, "ORD-7842", "ESCALATED", None)
+
+
+def test_evidence_from_a_superseded_policy_version_is_not_trusted():
+    stale = PolicyDecision(refund_eligible=True, rag_confidence=0.9, grounded=True, insufficient_evidence=False, policy_key="refund-policy",
+                           policy_version="2", citations=[Citation(policy_key="refund-policy", version="1")])
+    assert "POLICY_VERSION_MISMATCH" in policy_violations(stale, 0.5)
+    other = stale.model_copy(update={"citations": [Citation(policy_key="refund-policy", version="2"), Citation(policy_key="shipping-delay-policy", version="1")]})
+    assert policy_violations(other, 0.5) == []                    # a different policy at its own version is fine

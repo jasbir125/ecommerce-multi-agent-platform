@@ -14,6 +14,7 @@ import org.springframework.util.backoff.ExponentialBackOff;
  * parked on "<topic>.dlt" so one poison message cannot block the partition.
  */
 @Configuration
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "platform.messaging.enabled", havingValue = "true", matchIfMissing = true)
 public class KafkaErrorConfig {
 
     @Bean

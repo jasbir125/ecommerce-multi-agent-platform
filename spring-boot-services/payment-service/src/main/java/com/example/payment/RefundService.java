@@ -33,8 +33,9 @@ public class RefundService {
     private final RestClient orders;
     private final RestClient approvals;
     private final BigDecimal approvalThreshold;
+    private final io.micrometer.core.instrument.MeterRegistry metrics;
 
-    public RefundService(JdbcClient jdbc, EventPublisher events, AuditClient audit, PlatformRestClient clients,
+    public RefundService(JdbcClient jdbc, EventPublisher events, AuditClient audit, PlatformRestClient clients, io.micrometer.core.instrument.MeterRegistry metrics,
                          @Value("${services.order-url}") String orderUrl,
                          @Value("${services.approval-url}") String approvalUrl,
                          @Value("${refund.approval-threshold}") BigDecimal approvalThreshold) {
@@ -44,6 +45,7 @@ public class RefundService {
         this.orders = clients.forBaseUrl(orderUrl);
         this.approvals = clients.forBaseUrl(approvalUrl);
         this.approvalThreshold = approvalThreshold;
+        this.metrics = metrics;
     }
 
     @Transactional
@@ -90,6 +92,8 @@ public class RefundService {
         } catch (DuplicateKeyException race) {
             return findByKey(req.idempotencyKey()).orElseThrow(); // two requests with one key raced
         }
+        metrics.counter("refunds.initiated").increment();
+        metrics.summary("refunds.amount").record(req.amount().doubleValue());
         events.publish("payment.refund.initiated", id, "RefundInitiated", req.workflowId(), req.approvalId(),
                 Map.of("refundId", id, "orderId", req.orderId(), "amount", req.amount()));
         audit.record(req.workflowId(), "payment-service", "REFUND_INITIATED", null,

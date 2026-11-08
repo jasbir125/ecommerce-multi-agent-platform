@@ -1,12 +1,60 @@
 {
-  "name": "duplicate-event",
-  "status": "TODO - populated in Phase 7",
-  "input": {},
-  "expected_intent": null,
-  "expected_tools": [],
-  "expected_approval_required": null,
-  "expected_final_status": null,
-  "expected_guardrail_behavior": null,
-  "expected_rag_confidence": null,
-  "expected_citations": []
+ "scenario": "duplicate-event",
+ "description": "The same Kafka events delivered more than once: one run, one approval, one refund. Needs Kafka on localhost:9092.",
+ "cases": [
+  {
+   "id": "de-duplicate-started-and-decided",
+   "mode": "live",
+   "description": "workflow.started is replayed twice (same id) and once with a new id; workflow.approval.decided is replayed twice.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 129.99,
+     "product": "PRD-100",
+     "shipment": {
+      "status": "LOST",
+      "delay_days": 5
+     }
+    },
+    "approval": "APPROVE",
+    "duplicate_events": {
+     "workflow.started": 3,
+     "workflow.approval.decided": 2
+    }
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [
+     "create_approval_request",
+     "initiate_refund"
+    ],
+    "must_not_call": []
+   },
+   "expected_approval_required": true,
+   "expected_final_status": "COMPLETED",
+   "expected_guardrail_behavior": {
+    "audit_events_present": [],
+    "audit_events_absent": [],
+    "kafka_topics_present": [],
+    "message_includes": [],
+    "message_includes_any": [],
+    "message_excludes": [],
+    "message_matches": [],
+    "message_must_not_match": [],
+    "errors_include": []
+   },
+   "expected_rag_confidence": null,
+   "expected_citations": [],
+   "expected_state": {
+    "agent_runs": 1,
+    "refund_rows": 1,
+    "approval_rows": 1
+   }
+  }
+ ]
 }

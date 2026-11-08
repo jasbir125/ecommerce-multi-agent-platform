@@ -2,6 +2,7 @@
 import logging
 
 from fastmcp import FastMCP
+from mcp_common import observability
 from starlette.middleware import Middleware
 from starlette.responses import JSONResponse
 
@@ -22,11 +23,15 @@ INSTRUCTIONS = ("Tools for investigating and recovering delayed ecommerce orders
 def create_server(settings: Settings | None = None, deps: Deps | None = None) -> FastMCP:
     settings = settings or get_settings()
     deps = deps or Deps.build(settings)
-    mcp = FastMCP("ecommerce-mcp-server", instructions=INSTRUCTIONS)
+    mcp = FastMCP("ecommerce-mcp-server", middleware=[observability.ObservabilityMiddleware("ecommerce-mcp-server")], instructions=INSTRUCTIONS)
     read_tools.register(mcp, deps)
     write_tools.register(mcp, deps)
     ecommerce_resources.register(mcp, deps)
     ecommerce_prompts.register(mcp, deps)
+
+    @mcp.custom_route("/metrics", methods=["GET"])
+    async def metrics(request):
+        return observability.metrics_response(request)
 
     @mcp.custom_route("/health", methods=["GET"])
     async def health(_request):
@@ -37,6 +42,7 @@ def create_server(settings: Settings | None = None, deps: Deps | None = None) ->
 
 if __name__ == "__main__":
     s = get_settings()
+    observability.setup("ecommerce-mcp-server")
     create_server(s).run(
         transport="http", host="0.0.0.0", port=s.ecommerce_mcp_port, path="/mcp",
-        middleware=[Middleware(TokenAuthMiddleware, token=s.mcp_service_token)])
+        middleware=[Middleware(TokenAuthMiddleware, token=s.mcp_service_token, exempt_paths=("/health", "/metrics"))])

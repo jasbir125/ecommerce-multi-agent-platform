@@ -1,5 +1,6 @@
 package com.example.shipment;
 
+import com.example.common.security.CallerHolder;
 import com.example.shipment.ShipmentRecords.*;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,6 +21,7 @@ public class ShipmentController {
 
     @PostMapping("/{orderId}/carrier-case")
     public CarrierCase createCase(@PathVariable String orderId, @RequestBody(required = false) CarrierCaseRequest body) {
+        CallerHolder.requireInternal();
         return service.createCase(orderId, body);
     }
 }

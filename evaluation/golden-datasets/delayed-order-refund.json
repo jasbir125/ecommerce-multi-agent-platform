@@ -1,12 +1,224 @@
 {
-  "name": "delayed-order-refund",
-  "status": "TODO - populated in Phase 7",
-  "input": {},
-  "expected_intent": null,
-  "expected_tools": [],
-  "expected_approval_required": null,
-  "expected_final_status": null,
-  "expected_guardrail_behavior": null,
-  "expected_rag_confidence": null,
-  "expected_citations": []
+ "scenario": "delayed-order-refund",
+ "description": "The core story: a lost or late shipment, a verified policy, a human approval, then refund, replacement and notification.",
+ "cases": [
+  {
+   "id": "dor-lost-approved",
+   "mode": "live",
+   "description": "Lost shipment, manager approves: full recovery.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 129.99,
+     "product": "PRD-100",
+     "shipment": {
+      "status": "LOST",
+      "delay_days": 5
+     }
+    },
+    "approval": "APPROVE"
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [
+     "get_order_status",
+     "get_payment_status",
+     "get_shipment_status",
+     "ask_policy",
+     "validate_refund_eligibility",
+     "search_products",
+     "create_approval_request",
+     "get_approval_status",
+     "initiate_refund",
+     "reserve_inventory",
+     "create_replacement_order",
+     "create_carrier_case",
+     "notify_customer"
+    ],
+    "must_not_call": []
+   },
+   "expected_approval_required": true,
+   "expected_final_status": "COMPLETED",
+   "expected_guardrail_behavior": {
+    "audit_events_present": [
+     "APPROVAL_APPROVED",
+     "REFUND_INITIATED",
+     "INVENTORY_RESERVED",
+     "REPLACEMENT_ORDER_CREATED",
+     "CARRIER_CASE_CREATED",
+     "CUSTOMER_NOTIFIED"
+    ],
+    "audit_events_absent": [],
+    "kafka_topics_present": [
+     "workflow.approval.requested",
+     "workflow.approval.decided",
+     "payment.refund.initiated",
+     "order.replacement.created",
+     "order.recovery.completed"
+    ],
+    "message_includes": [],
+    "message_includes_any": [],
+    "message_excludes": [
+     "will follow up",
+     "will contact you"
+    ],
+    "message_matches": [
+     "RF-[A-Z0-9]{10}",
+     "ORD-[A-Z0-9]{10}"
+    ],
+    "message_must_not_match": [
+     "(arrive|deliver)[^.]*(on|by) "
+    ],
+    "errors_include": []
+   },
+   "expected_rag_confidence": {
+    "min": 0.7,
+    "max": 1.0,
+    "grounded": true
+   },
+   "expected_citations": [
+    {
+     "policyKey": "refund-policy",
+     "version": "2"
+    }
+   ],
+   "expected_state": {
+    "refund_rows": 1,
+    "approval_rows": 1
+   }
+  },
+  {
+   "id": "dor-delayed-4d",
+   "mode": "live",
+   "description": "Delayed (not lost) four days: still eligible under the three-day rule.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 129.99,
+     "product": "PRD-100",
+     "shipment": {
+      "status": "DELAYED",
+      "delay_days": 4
+     }
+    },
+    "approval": "APPROVE"
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [
+     "get_order_status",
+     "get_payment_status",
+     "get_shipment_status",
+     "ask_policy",
+     "validate_refund_eligibility",
+     "search_products",
+     "create_approval_request",
+     "get_approval_status",
+     "initiate_refund",
+     "reserve_inventory",
+     "create_replacement_order",
+     "create_carrier_case",
+     "notify_customer"
+    ],
+    "must_not_call": []
+   },
+   "expected_approval_required": true,
+   "expected_final_status": "COMPLETED",
+   "expected_guardrail_behavior": {
+    "audit_events_present": [
+     "REFUND_INITIATED",
+     "CARRIER_CASE_CREATED"
+    ],
+    "audit_events_absent": [],
+    "kafka_topics_present": [],
+    "message_includes": [],
+    "message_includes_any": [],
+    "message_excludes": [],
+    "message_matches": [
+     "RF-[A-Z0-9]{10}"
+    ],
+    "message_must_not_match": [],
+    "errors_include": []
+   },
+   "expected_rag_confidence": {
+    "min": 0.7,
+    "max": 1.0,
+    "grounded": true
+   },
+   "expected_citations": [
+    {
+     "policyKey": "refund-policy",
+     "version": "2"
+    }
+   ]
+  },
+  {
+   "id": "dor-no-cheaper-replacement",
+   "mode": "live",
+   "description": "Cheapest item in its category: nothing cheaper is in stock, so refund only.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 79.99,
+     "product": "PRD-103",
+     "shipment": {
+      "status": "LOST",
+      "delay_days": 5
+     }
+    },
+    "approval": "APPROVE"
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [
+     "initiate_refund",
+     "create_approval_request"
+    ],
+    "must_not_call": [
+     "reserve_inventory",
+     "create_replacement_order"
+    ]
+   },
+   "expected_approval_required": true,
+   "expected_final_status": "COMPLETED",
+   "expected_guardrail_behavior": {
+    "audit_events_present": [],
+    "audit_events_absent": [
+     "REPLACEMENT_ORDER_CREATED"
+    ],
+    "kafka_topics_present": [],
+    "message_includes": [],
+    "message_includes_any": [],
+    "message_excludes": [],
+    "message_matches": [
+     "RF-[A-Z0-9]{10}"
+    ],
+    "message_must_not_match": [
+     "replacement order ORD-"
+    ],
+    "errors_include": []
+   },
+   "expected_rag_confidence": {
+    "min": 0.7,
+    "max": 1.0,
+    "grounded": true
+   },
+   "expected_citations": []
+  }
+ ]
 }

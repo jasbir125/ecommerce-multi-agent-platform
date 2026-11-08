@@ -19,8 +19,16 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    private final io.micrometer.core.instrument.MeterRegistry metrics;
+
+    public GlobalExceptionHandler(io.micrometer.core.instrument.MeterRegistry metrics) {
+        this.metrics = metrics;
+    }
+
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ProblemDetail> handleApi(ApiException ex) {
+        // Business and authorization refusals by stable code: the guardrail/rule rejection rate, per service.
+        metrics.counter("platform.api.errors", "code", ex.code(), "status", String.valueOf(ex.status().value())).increment();
         return problem(ex.status(), ex.code(), ex.getMessage());
     }
 
@@ -50,8 +58,19 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.CONFLICT, "DUPLICATE", "Resource already exists");
     }
 
+    /** Malformed JSON or an unreadable body is the client's mistake (400), not a server error. */
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    ResponseEntity<ProblemDetail> handleUnreadable(org.springframework.http.converter.HttpMessageNotReadableException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "MALFORMED_REQUEST", "The request body could not be read");
+    }
+
     @ExceptionHandler(Exception.class)
     ResponseEntity<ProblemDetail> handleOther(Exception ex) {
+        // Spring's own HTTP errors (unknown path 404, wrong method 405, unsupported media type 415...) keep their status.
+        if (ex instanceof org.springframework.web.ErrorResponse er) {
+            HttpStatus status = HttpStatus.valueOf(er.getStatusCode().value());
+            return problem(status, "HTTP_" + status.value(), status.getReasonPhrase());
+        }
         log.error("Unhandled error", ex);
         return problem(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Unexpected error");
     }

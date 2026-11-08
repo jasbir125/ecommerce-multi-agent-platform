@@ -6,6 +6,7 @@ X-Customer-Id and refuse write tools for any other workflow than X-Workflow-Id.
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 from langchain_core.tools import BaseTool
@@ -14,6 +15,9 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from app.config import Settings
 from app.guardrails.tool_guardrails import ToolCallError
 from app.mcp.tool_loader import parse_tool_result
+from app.observability import metrics as m
+from app.observability.context import CURRENT_NODE
+from app.observability.tracing import span
 
 
 class McpGateway:
@@ -28,6 +32,7 @@ class McpGateway:
             "policy": {"transport": "streamable_http", "url": settings.policy_mcp_url, "headers": headers},
         }, handle_tool_errors=False)
         self._tools: dict[str, BaseTool] | None = None
+        self.call_log: list[dict[str, Any]] = []      # every call made by graph steps (node, tool, ok), for the run trace
 
     async def tools(self) -> dict[str, BaseTool]:
         if self._tools is None:
@@ -39,12 +44,25 @@ class McpGateway:
         tool = (await self.tools()).get(name)
         if tool is None:
             raise ToolCallError(f"UNKNOWN_TOOL: {name}")
+        started = time.perf_counter()
         for attempt in range(1, self.RATE_LIMIT_ATTEMPTS + 1):
             try:
-                return parse_tool_result(await tool.ainvoke(args))
+                with span(f"tool {name}", agent="code"):
+                    out = parse_tool_result(await tool.ainvoke(args))
+                self.call_log.append({"node": CURRENT_NODE.get(), "tool": name, "ok": True, "error": None})
+                m.TOOL_CALLS.labels("code", name, "ok").inc()
+                m.TOOL_LATENCY.labels(name).observe(time.perf_counter() - started)
+                return out
             except Exception as e:  # noqa: BLE001
                 # Only a rate limit is retried here: it is transient and the call never reached a service.
                 if "RATE_LIMITED" in str(e) and attempt < self.RATE_LIMIT_ATTEMPTS:
+                    m.RETRIES.labels("rate_limit").inc()
                     await asyncio.sleep(self.RATE_LIMIT_WAIT * attempt)
                     continue
+                self.call_log.append({"node": CURRENT_NODE.get(), "tool": name, "ok": False, "error": str(e)[:160]})
+                m.TOOL_CALLS.labels("code", name, "error").inc()
+                code = str(e).split(":")[0].strip()
+                if code.isupper() and len(code) > 3:                    # a domain rule or guardrail said no
+                    m.guardrail("business", code)
+                m.TOOL_LATENCY.labels(name).observe(time.perf_counter() - started)
                 raise ToolCallError(str(e)) from e

@@ -26,9 +26,11 @@ public class OrderService {
     private final EventPublisher events;
     private final AuditClient audit;
     private final RestClient inventory;
+    private final com.example.common.security.FaultInjector faults;
 
     public OrderService(OrderRepository orders, JdbcClient jdbc, EventPublisher events, AuditClient audit,
-                        PlatformRestClient clients, @Value("${services.inventory-url}") String inventoryUrl) {
+                        PlatformRestClient clients, com.example.common.security.FaultInjector faults, @Value("${services.inventory-url}") String inventoryUrl) {
+        this.faults = faults;
         this.orders = orders;
         this.jdbc = jdbc;
         this.events = events;
@@ -112,6 +114,7 @@ public class OrderService {
         Map<String, Object> product = inventory.get().uri("/api/inventory/{id}", productId).retrieve().body(Map.class);
         BigDecimal amount = new BigDecimal(String.valueOf(product.get("price"))).multiply(BigDecimal.valueOf(qty));
 
+        faults.check("order", "replacement", req.workflowId());          // test-only: fail after the reservation was validated
         String newId = Ids.next("ORD");
         jdbc.sql("""
                 INSERT INTO customer_order (order_id, customer_id, status, payment_status, total_amount,

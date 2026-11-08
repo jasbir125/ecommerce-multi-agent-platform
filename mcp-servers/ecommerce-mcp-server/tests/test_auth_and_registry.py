@@ -52,3 +52,21 @@ async def test_read_tools_are_marked_read_only(make_client):
         tools = {t.name: t for t in await c.list_tools()}
     assert tools["get_order_status"].annotations.readOnlyHint is True
     assert tools["initiate_refund"].annotations.readOnlyHint is False
+
+
+async def test_tool_calls_are_counted_by_result_and_rejections_by_code(make_client, api):
+    import httpx
+    import pytest
+    from fastmcp.exceptions import ToolError
+    from prometheus_client import generate_latest
+    api.get("http://localhost:8081/api/orders/ORD-1").mock(return_value=httpx.Response(200, json={"orderId": "ORD-1", "status": "X", "paymentStatus": "CAPTURED", "totalAmount": 1, "currency": "USD"}))
+    api.get("http://localhost:8081/api/orders/ORD-2").mock(return_value=httpx.Response(403, json={"code": "NOT_ORDER_OWNER", "detail": "no"}))
+    async with make_client() as c:
+        await c.call_tool("get_order_status", {"order_id": "ORD-1"})
+        with pytest.raises(ToolError):
+            await c.call_tool("get_order_status", {"order_id": "ORD-2"})
+    text = generate_latest().decode()
+    assert 'mcp_tool_calls_total{result="ok",server="ecommerce-mcp-server",tool="get_order_status"}' in text
+    assert 'mcp_tool_calls_total{result="error",server="ecommerce-mcp-server",tool="get_order_status"}' in text
+    assert 'mcp_guardrail_rejections_total{code="NOT_ORDER_OWNER",server="ecommerce-mcp-server"}' in text
+    assert "mcp_tool_latency_seconds_count" in text

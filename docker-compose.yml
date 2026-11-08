@@ -30,6 +30,15 @@ x-internal-env: &internal-env
   DATABASE_URL: postgresql://${POSTGRES_USER:-ecommerce}:${POSTGRES_PASSWORD:-ecommerce_local_pw}@postgres:5432/${POSTGRES_DB:-ecommerce}
   MANAGEMENT_OTLP_TRACING_ENDPOINT: http://otel-collector:4318/v1/traces
   PLATFORM_SERVICE_TOKEN: ${MCP_SERVICE_TOKEN:-local-demo-token}
+  PLATFORM_ENV: ${PLATFORM_ENV:-dev}
+  PLATFORM_FAULTS_ENABLED: ${PLATFORM_FAULTS_ENABLED:-false}
+  PLATFORM_JWT_JWKS_URL: http://auth-service:8093/.well-known/jwks.json
+  PLATFORM_JWT_ISSUER: order-recovery-auth
+  PLATFORM_JWT_AUDIENCE: order-recovery-api
+  AUTH_JWKS_URL: http://auth-service:8093/.well-known/jwks.json
+  AUTH_ISSUER: order-recovery-auth
+  AUTH_AUDIENCE: order-recovery-api
+  AUTH_SERVICE_URL: http://auth-service:8093
   PLATFORM_AUDIT_SERVICE_URL: http://audit-service:8087
   ORDER_SERVICE_URL: http://order-service:8081
   SHIPMENT_SERVICE_URL: http://shipment-service:8082
@@ -52,7 +61,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-ecommerce}
       POSTGRES_USER: ${POSTGRES_USER:-ecommerce}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecommerce_local_pw}
-    ports: ["5432:5432"]
+    ports: ["${POSTGRES_HOST_PORT:-5432}:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
       # Runs once on first start (empty data volume only).
@@ -136,6 +145,7 @@ services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.111.0
     container_name: platform-otel
+    depends_on: [jaeger]
     command: ["--config=/etc/otel/config.yml"]
     ports:
       - "4317:4317"   # OTLP gRPC
@@ -145,12 +155,21 @@ services:
       - ./infra/opentelemetry/otel-collector-config.yml:/etc/otel/config.yml:ro
     networks: [platform-net]
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    container_name: platform-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports: ["16686:16686"]     # trace search UI
+    networks: [platform-net]
+
   prometheus:
     image: prom/prometheus:v2.55.0
     container_name: platform-prometheus
     ports: ["9090:9090"]
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - promdata:/prometheus
     extra_hosts: ["host.docker.internal:host-gateway"]
     networks: [platform-net]
@@ -158,13 +177,14 @@ services:
   grafana:
     image: grafana/grafana:11.3.0
     container_name: platform-grafana
-    depends_on: [prometheus]
+    depends_on: [prometheus, jaeger]
     ports: ["3000:3000"]
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
     volumes:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafanadata:/var/lib/grafana
     networks: [platform-net]
 
@@ -287,6 +307,16 @@ services:
       postgres: { condition: service_healthy }
       kafka: { condition: service_healthy }
 
+  auth-service:
+    <<: *app-common
+    profiles: [apps]
+    build:
+      context: ./spring-boot-services
+      args: { MODULE: auth-service }
+    container_name: platform-auth-service
+    ports: ["8093:8093"]
+    environment: *internal-env
+
   # ------------------------------------------------------ Python FastMCP servers
   ecommerce-mcp-server:
     <<: *app-common
@@ -336,7 +366,12 @@ services:
       STREAMLIT_API_BASE_URL: http://workflow-service:8088
       STREAMLIT_APPROVAL_API_BASE_URL: http://approval-service:8085
       AGENT_HOST_URL: http://agent-host:8092
-    depends_on: [agent-host, workflow-service, approval-service]
+      # Real sign-in. The UI holds only the user's access token: it must never have the service token.
+      UI_AUTH_MODE: ${UI_AUTH_MODE:-login}
+      PLATFORM_SERVICE_TOKEN: ""
+      MCP_SERVICE_TOKEN: ""
+      STREAMLIT_SERVICE_TOKEN: ""
+    depends_on: [agent-host, workflow-service, approval-service, auth-service]
 
 networks:
   platform-net:

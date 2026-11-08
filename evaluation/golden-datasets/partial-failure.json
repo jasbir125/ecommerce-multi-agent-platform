@@ -1,12 +1,144 @@
 {
-  "name": "partial-failure",
-  "status": "TODO - populated in Phase 7",
-  "input": {},
-  "expected_intent": null,
-  "expected_tools": [],
-  "expected_approval_required": null,
-  "expected_final_status": null,
-  "expected_guardrail_behavior": null,
-  "expected_rag_confidence": null,
-  "expected_citations": []
+ "scenario": "partial-failure",
+ "description": "A later step fails after an earlier one succeeded: compensate, keep the refund, alert support, end PARTIALLY_COMPLETED. Needs PLATFORM_FAULTS_ENABLED=true.",
+ "cases": [
+  {
+   "id": "pf-replacement-fails",
+   "mode": "live",
+   "description": "The replacement order fails after stock was reserved: stock is released.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 129.99,
+     "product": "PRD-100",
+     "shipment": {
+      "status": "LOST",
+      "delay_days": 5
+     }
+    },
+    "approval": "APPROVE",
+    "faults": [
+     {
+      "service": "order",
+      "operation": "replacement",
+      "scope": "workflow"
+     }
+    ]
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [
+     "initiate_refund",
+     "reserve_inventory",
+     "create_replacement_order",
+     "release_inventory",
+     "create_support_task"
+    ],
+    "must_not_call": []
+   },
+   "expected_approval_required": true,
+   "expected_final_status": "PARTIALLY_COMPLETED",
+   "expected_guardrail_behavior": {
+    "audit_events_present": [
+     "REFUND_INITIATED",
+     "INVENTORY_RESERVED",
+     "INVENTORY_RELEASED",
+     "WORKFLOW_COMPENSATING",
+     "WORKFLOW_PARTIALLY_COMPLETED"
+    ],
+    "audit_events_absent": [],
+    "kafka_topics_present": [
+     "inventory.reservation.released",
+     "workflow.compensation.requested"
+    ],
+    "message_includes": [],
+    "message_includes_any": [],
+    "message_excludes": [],
+    "message_matches": [
+     "RF-[A-Z0-9]{10}"
+    ],
+    "message_must_not_match": [
+     "replacement order ORD-[A-Z0-9]+ has been created"
+    ],
+    "errors_include": []
+   },
+   "expected_rag_confidence": null,
+   "expected_citations": [],
+   "expected_state": {
+    "refund_rows": 1
+   }
+  },
+  {
+   "id": "pf-reservation-fails",
+   "mode": "live",
+   "description": "Stock cannot be reserved: refund stands, nothing to release.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 129.99,
+     "product": "PRD-100",
+     "shipment": {
+      "status": "LOST",
+      "delay_days": 5
+     }
+    },
+    "approval": "APPROVE",
+    "faults": [
+     {
+      "service": "inventory",
+      "operation": "reserve",
+      "scope": "workflow"
+     }
+    ]
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [
+     "initiate_refund",
+     "reserve_inventory",
+     "create_support_task"
+    ],
+    "must_not_call": [
+     "create_replacement_order",
+     "release_inventory"
+    ]
+   },
+   "expected_approval_required": true,
+   "expected_final_status": "PARTIALLY_COMPLETED",
+   "expected_guardrail_behavior": {
+    "audit_events_present": [
+     "REFUND_INITIATED",
+     "WORKFLOW_PARTIALLY_COMPLETED"
+    ],
+    "audit_events_absent": [
+     "INVENTORY_RELEASED",
+     "REPLACEMENT_ORDER_CREATED"
+    ],
+    "kafka_topics_present": [],
+    "message_includes": [],
+    "message_includes_any": [],
+    "message_excludes": [],
+    "message_matches": [
+     "RF-[A-Z0-9]{10}"
+    ],
+    "message_must_not_match": [],
+    "errors_include": []
+   },
+   "expected_rag_confidence": null,
+   "expected_citations": [],
+   "expected_state": {
+    "refund_rows": 1
+   }
+  }
+ ]
 }

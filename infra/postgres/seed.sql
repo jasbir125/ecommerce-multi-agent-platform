@@ -11,6 +11,7 @@ CREATE TABLE outbox_event (
     topic       VARCHAR(200) NOT NULL,
     event_key   VARCHAR(200),
     payload     TEXT         NOT NULL,
+    trace_context VARCHAR(100),                  -- W3C traceparent of the request that caused the event
     created_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     sent_at     TIMESTAMP
 );
@@ -22,6 +23,17 @@ CREATE TABLE processed_event (
     event_id     VARCHAR(100) NOT NULL,
     processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (consumer, event_id)
+);
+
+-- Test-only fault injection (read only when platform.faults.enabled=true, which production mode refuses).
+CREATE TABLE fault_injection (
+    id         BIGSERIAL PRIMARY KEY,
+    service    VARCHAR(50)  NOT NULL,           -- order | inventory | shipment
+    operation  VARCHAR(50)  NOT NULL,           -- e.g. replacement, reserve, carrier
+    scope      VARCHAR(100) NOT NULL,           -- workflow id or order id the fault applies to
+    mode       VARCHAR(20)  NOT NULL DEFAULT 'error' CHECK (mode IN ('error','unavailable')),
+    remaining  INT          NOT NULL DEFAULT 1,
+    created_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE customer_order (

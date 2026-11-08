@@ -7,6 +7,7 @@ from app.guardrails.input_guardrails import mask_pii
 from app.guardrails.output_guardrails import DecisionContext, decision_violations
 from app.guardrails.policy_guardrails import policy_violations
 from app.models.resolution import ResolutionDecision
+from app.observability import metrics as m
 
 SYSTEM = """You are the Decision Agent. Choose ONE action for the customer using only the verified facts given.
 Actions: REFUND_AND_REPLACE, REFUND_ONLY, REPLACE_ONLY, ESCALATE, NO_ACTION.
@@ -78,6 +79,8 @@ async def run(state, deps, config) -> dict:
         if not problems:
             return {"resolution": d, "errors": notes, "_retries": attempts - 1, "_detail": d.reason}
         notes.append(f"GUARDRAIL_DECISION_REJECTED: {', '.join(problems)}")
+        for code in problems:
+            m.guardrail("output", code)
         await deps.workflows.audit(state.workflow_id, "decision-agent", "GUARDRAIL_OUTPUT_REJECTED",
                                    {"violations": problems, "attempt": attempts}, state.customer_id)
         feedback = f"\nYour previous answer was rejected for: {', '.join(problems)}. Fix these and answer again."

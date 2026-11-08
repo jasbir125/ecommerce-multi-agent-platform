@@ -1,12 +1,146 @@
 {
-  "name": "incorrect-policy-retrieval",
-  "status": "TODO - populated in Phase 7",
-  "input": {},
-  "expected_intent": null,
-  "expected_tools": [],
-  "expected_approval_required": null,
-  "expected_final_status": null,
-  "expected_guardrail_behavior": null,
-  "expected_rag_confidence": null,
-  "expected_citations": []
+ "scenario": "incorrect-policy-retrieval",
+ "description": "Retrieval returns the wrong or an outdated policy: the system must not act on it. Runs in-process with scripted retrieval.",
+ "cases": [
+  {
+   "id": "ipr-wrong-topic",
+   "mode": "component",
+   "description": "Only a warranty passage comes back for a refund question.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 129.99,
+     "product": "PRD-100",
+     "shipment": {
+      "status": "LOST",
+      "delay_days": 5
+     }
+    },
+    "approval": "APPROVE"
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [],
+    "must_not_call": [
+     "initiate_refund",
+     "reserve_inventory",
+     "create_replacement_order",
+     "create_approval_request"
+    ]
+   },
+   "expected_approval_required": false,
+   "expected_final_status": "ESCALATED",
+   "expected_guardrail_behavior": {
+    "audit_events_present": [],
+    "audit_events_absent": [],
+    "kafka_topics_present": [],
+    "message_includes": [],
+    "message_includes_any": [],
+    "message_excludes": [],
+    "message_matches": [],
+    "message_must_not_match": [],
+    "errors_include": [
+     "DECISION_ESCALATED"
+    ]
+   },
+   "expected_rag_confidence": {
+    "min": 0.0,
+    "max": 0.35,
+    "grounded": false
+   },
+   "expected_citations": [],
+   "script": {
+    "rag": {
+     "confidence": 0.6,
+     "sources": [
+      {
+       "chunkId": "w1",
+       "policyKey": "warranty-policy",
+       "version": "1",
+       "section": "Coverage period",
+       "policyType": "warranty",
+       "text": "Coverage period: Electronics, including headphones and speakers, have a 12 month limited warranty starting on the delivery date.",
+       "rerankScore": 0.5
+      }
+     ],
+     "rerank": {
+      "order": [
+       1
+      ],
+      "relevant": []
+     }
+    }
+   }
+  },
+  {
+   "id": "ipr-superseded-version",
+   "mode": "component",
+   "description": "The evidence is the superseded v1 text while the deterministic check used v2.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 129.99,
+     "product": "PRD-100",
+     "shipment": {
+      "status": "LOST",
+      "delay_days": 5
+     }
+    },
+    "approval": "APPROVE"
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [],
+    "must_not_call": [
+     "initiate_refund",
+     "reserve_inventory",
+     "create_replacement_order",
+     "create_approval_request"
+    ]
+   },
+   "expected_approval_required": false,
+   "expected_final_status": "ESCALATED",
+   "expected_guardrail_behavior": {
+    "audit_events_present": [],
+    "audit_events_absent": [],
+    "kafka_topics_present": [],
+    "message_includes": [],
+    "message_includes_any": [],
+    "message_excludes": [],
+    "message_matches": [],
+    "message_must_not_match": [],
+    "errors_include": [
+     "POLICY_VERSION_MISMATCH"
+    ]
+   },
+   "expected_rag_confidence": null,
+   "expected_citations": [],
+   "script": {
+    "rag": {
+     "confidence": 0.8,
+     "sources": [
+      {
+       "chunkId": "r1",
+       "policyKey": "refund-policy",
+       "version": "1",
+       "section": "Delayed shipments",
+       "policyType": "refund",
+       "text": "Delayed shipments: Delayed shipments are not covered by this legacy policy. Customers with delayed orders must wait for delivery.",
+       "rerankScore": 0.8
+      }
+     ]
+    }
+   }
+  }
+ ]
 }

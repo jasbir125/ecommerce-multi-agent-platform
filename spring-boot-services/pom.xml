@@ -26,6 +26,7 @@
 
   <modules>
     <module>common</module>
+    <module>auth-service</module>
     <module>order-service</module>
     <module>shipment-service</module>
     <module>payment-service</module>

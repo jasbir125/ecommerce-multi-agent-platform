@@ -11,6 +11,7 @@ from app.graph.deps import deps_of
 from app.graph.tracing import traced
 from app.guardrails.input_guardrails import check_request
 from app.guardrails.tool_guardrails import ToolCallError
+from app.observability import metrics as m
 from app.models.resolution import ExecutionResult, StepResult
 
 log = logging.getLogger("agent.nodes")
@@ -23,6 +24,8 @@ async def input_guard(state, config) -> dict:
     check = check_request(state.customer_message, state.customer_id, state.order_id, deps.settings.max_message_length)
     if check.ok:
         return {}
+    for v in check.violations:
+        m.guardrail("input", v)
     await deps.workflows.audit(state.workflow_id, "input-guardrails", "GUARDRAIL_INPUT_REJECTED",
                                {"violations": check.violations}, state.customer_id)
     await deps.workflows.transition(state.workflow_id, state.customer_id, "agent-input-rejected", "ESCALATED",
@@ -122,8 +125,21 @@ async def approval_wait(state, config) -> dict:
             return {"approval_status": "UNKNOWN", "errors": [f"APPROVAL_STATUS_UNAVAILABLE: {str(e)[:120]}"]}
         status = a.get("status", "UNKNOWN")
         if status != "PENDING":
+            _observe_approval(a, status)
             return {"approval_status": status, "_detail": f"approval {status} by {a.get('decidedBy')}"}
         interrupt({"waiting_for": "approval", "approval_id": state.approval_id})
+
+
+def _observe_approval(a: dict, status: str) -> None:
+    """Human decision time, from the approval service's own timestamps."""
+    from datetime import datetime
+    try:
+        created, decided = a.get("createdAt"), a.get("decidedAt")
+        if created and decided:
+            secs = (datetime.fromisoformat(decided) - datetime.fromisoformat(created)).total_seconds()
+            m.APPROVAL_WAIT.labels(status).observe(max(0.0, secs))
+    except (ValueError, TypeError):
+        pass
 
 
 # ---------------------------------------------------------------------- execution

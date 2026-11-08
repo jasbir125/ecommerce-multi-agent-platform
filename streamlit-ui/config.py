@@ -9,7 +9,10 @@ class Config:
     approval_url: str = "http://localhost:8085"      # approvals
     agent_url: str = "http://localhost:8092"         # agent host: live runs, RAG, admin metrics
     audit_url: str = "http://localhost:8087"
-    service_token: str = "local-demo-token"
+    service_token: str = "local-demo-token"      # dev mode only; login mode never sends it
+    auth_url: str = "http://localhost:8093"
+    auth_mode: str = "dev"                       # dev: persona switcher; login: real sign-in with access tokens
+    show_demo_credentials: bool = True
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -19,4 +22,7 @@ class Config:
             approval_url=e.get("STREAMLIT_APPROVAL_API_BASE_URL", cls.approval_url).rstrip("/"),
             agent_url=e.get("AGENT_HOST_URL", cls.agent_url).rstrip("/"),
             audit_url=e.get("AUDIT_SERVICE_URL", cls.audit_url).rstrip("/"),
-            service_token=e.get("STREAMLIT_SERVICE_TOKEN", e.get("MCP_SERVICE_TOKEN", cls.service_token)))
+            service_token=e.get("STREAMLIT_SERVICE_TOKEN", e.get("MCP_SERVICE_TOKEN", cls.service_token)),
+            auth_url=e.get("AUTH_SERVICE_URL", cls.auth_url).rstrip("/"),
+            auth_mode=e.get("UI_AUTH_MODE", cls.auth_mode),
+            show_demo_credentials=e.get("UI_SHOW_DEMO_CREDENTIALS", "true").lower() == "true")

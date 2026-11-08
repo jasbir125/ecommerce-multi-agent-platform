@@ -5,7 +5,12 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+import time
+
 from langchain_core.tools import BaseTool, StructuredTool
+
+from app.observability import metrics as m
+from app.observability.tracing import span
 
 # LLM agents get READ-ONLY tools only. Write tools are called by deterministic graph nodes.
 AGENT_TOOLS: dict[str, set[str]] = {
@@ -58,14 +63,22 @@ def guard_tools(tools: dict[str, BaseTool], agent: str, policy: ToolPolicy, log:
                 problem = policy.check(agent, name, kwargs)
                 if problem:
                     log.append({"agent": agent, "tool": name, "args": kwargs, "ok": False, "error": problem})
+                    m.guardrail("tool", problem.split(":")[0])
+                    m.TOOL_CALLS.labels(agent, name, "blocked").inc()
                     return f"ERROR {problem}"
+                started = time.perf_counter()
                 try:
-                    result = await base.ainvoke(kwargs)
+                    with span(f"tool {name}", agent=agent):
+                        result = await base.ainvoke(kwargs)
                     log.append({"agent": agent, "tool": name, "args": kwargs, "ok": True, "result": result})
+                    m.TOOL_CALLS.labels(agent, name, "ok").inc()
                     return _as_text(result)
                 except Exception as e:  # noqa: BLE001 - agent should see the failure, not crash
                     log.append({"agent": agent, "tool": name, "args": kwargs, "ok": False, "error": str(e)})
+                    m.TOOL_CALLS.labels(agent, name, "error").inc()
                     return f"ERROR {e}"
+                finally:
+                    m.TOOL_LATENCY.labels(name).observe(time.perf_counter() - started)
             return StructuredTool.from_function(coroutine=run, name=name, description=base.description,
                                                 args_schema=base.args_schema)
         wrapped.append(make(base, name))

@@ -31,6 +31,10 @@ public final class WorkflowStatus {
         return NEXT.getOrDefault(from, Set.of()).contains(to);
     }
 
+    public static boolean isTerminalStatus(String s) {
+        return Set.of(COMPLETED, PARTIALLY_COMPLETED, ESCALATED, REJECTED, FAILED).contains(s);
+    }
+
     public static boolean isKnown(String s) {
         return NEXT.containsKey(s) || Set.of(COMPLETED, PARTIALLY_COMPLETED, ESCALATED, REJECTED, FAILED).contains(s);
     }

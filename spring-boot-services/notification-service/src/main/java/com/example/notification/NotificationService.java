@@ -39,8 +39,9 @@ public class NotificationService {
     private final AuditClient audit;
     private final RestClient payments;
     private final RestClient orders;
+    private final io.micrometer.core.instrument.MeterRegistry metrics;
 
-    public NotificationService(JdbcClient jdbc, EventPublisher events, AuditClient audit, PlatformRestClient clients,
+    public NotificationService(JdbcClient jdbc, EventPublisher events, AuditClient audit, PlatformRestClient clients, io.micrometer.core.instrument.MeterRegistry metrics,
                                @Value("${services.payment-url}") String paymentUrl,
                                @Value("${services.order-url}") String orderUrl) {
         this.jdbc = jdbc;
@@ -48,6 +49,7 @@ public class NotificationService {
         this.audit = audit;
         this.payments = clients.forBaseUrl(paymentUrl);
         this.orders = clients.forBaseUrl(orderUrl);
+        this.metrics = metrics;
     }
 
     @Transactional
@@ -73,6 +75,7 @@ public class NotificationService {
                 .param("tpl", n.template()).query(Long.class).single();
         // Delivery is simulated; the recipient is masked in logs.
         log.info("NOTIFY channel={} recipient={} template={}", channel, mask(n.customerId()), n.template());
+        metrics.counter("notifications.sent", "template", n.template()).increment();
         events.publish("customer.notification.sent", String.valueOf(id), "CustomerNotified", n.workflowId(), null,
                 Map.of("notificationId", id, "template", n.template(), "channel", channel));
         audit.record(n.workflowId(), "notification-service", "CUSTOMER_NOTIFIED", null,

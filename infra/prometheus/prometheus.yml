@@ -1,24 +1,33 @@
 global:
   scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
 
 scrape_configs:
-  # Metrics the OTel collector re-exposes from all instrumented services
-  - job_name: otel-collector
-    static_configs:
-      - targets: ["otel-collector:8889"]
-
-  # Spring Boot Actuator (Micrometer). host.docker.internal works for both
-  # host-run apps and published container ports.
+  # Spring Boot services: Micrometer via Actuator
   - job_name: spring-boot-services
     metrics_path: /actuator/prometheus
     static_configs:
       - targets:
-          - host.docker.internal:8081
-          - host.docker.internal:8082
-          - host.docker.internal:8083
-          - host.docker.internal:8084
-          - host.docker.internal:8085
-          - host.docker.internal:8086
-          - host.docker.internal:8087
-          - host.docker.internal:8088
-          - host.docker.internal:8089
+          - order-service:8081
+          - shipment-service:8082
+          - payment-service:8083
+          - inventory-service:8084
+          - approval-service:8085
+          - policy-service:8086
+          - audit-service:8087
+          - workflow-service:8088
+          - notification-service:8089
+          - auth-service:8093
+
+  # Python services: agent host (agents, models, tools, RAG) and the two MCP servers
+  - job_name: agent-host
+    static_configs: [{ targets: ["agent-host:8092"] }]
+  - job_name: mcp-servers
+    static_configs: [{ targets: ["ecommerce-mcp-server:8090", "policy-mcp-server:8091"] }]
+
+  # Metrics the OTel collector re-exposes from OTLP
+  - job_name: otel-collector
+    static_configs: [{ targets: ["otel-collector:8889"] }]

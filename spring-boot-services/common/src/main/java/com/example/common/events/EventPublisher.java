@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,14 +18,22 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link OutboxRelay} delivers it to Kafka afterwards.
  */
 @Component
+@ConditionalOnProperty(name = "platform.messaging.enabled", havingValue = "true", matchIfMissing = true)
 public class EventPublisher {
 
     private final JdbcClient jdbc;
     private final ObjectMapper mapper;
+    private final io.micrometer.tracing.Tracer tracer;
 
-    public EventPublisher(JdbcClient jdbc, ObjectMapper mapper) {
+    public EventPublisher(JdbcClient jdbc, ObjectMapper mapper, io.micrometer.tracing.Tracer tracer) {
         this.jdbc = jdbc;
         this.mapper = mapper;
+        this.tracer = tracer;
+    }
+
+    private String traceparent() {
+        var span = tracer.currentSpan();
+        return span == null ? null : "00-" + span.context().traceId() + "-" + span.context().spanId() + "-01";
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -35,8 +44,8 @@ public class EventPublisher {
         EventEnvelope env = new EventEnvelope(eventId, type, workflowId,
                 correlation != null ? correlation : workflowId, causationId, Instant.now(), payload);
         try {
-            jdbc.sql("INSERT INTO outbox_event (event_id, topic, event_key, payload) VALUES (?, ?, ?, ?)")
-                    .params(eventId, topic, key, mapper.writeValueAsString(env)).update();
+            jdbc.sql("INSERT INTO outbox_event (event_id, topic, event_key, payload, trace_context) VALUES (?, ?, ?, ?, ?)")
+                    .params(eventId, topic, key, mapper.writeValueAsString(env), traceparent()).update();
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Cannot serialize event " + type, e);
         }

@@ -7,6 +7,7 @@ import logging
 
 from aiokafka import AIOKafkaConsumer
 
+from app.observability.tracing import extract_context, span
 from app.runner import RunManager
 
 log = logging.getLogger("agent.kafka")
@@ -42,7 +43,7 @@ class TriggerConsumer:
                 log.info("Kafka trigger consumer listening on %s", TOPICS)
                 delay = 2
                 async for msg in consumer:
-                    self._handle(msg.topic, msg.value)
+                    self._handle(msg.topic, msg.value, {k: v.decode() for k, v in (msg.headers or []) if isinstance(v, bytes)})
             except asyncio.CancelledError:
                 await consumer.stop()
                 raise
@@ -56,26 +57,28 @@ class TriggerConsumer:
                 except Exception:  # noqa: BLE001
                     pass
 
-    def _handle(self, topic: str, value: bytes) -> None:
+    def _handle(self, topic: str, value: bytes, headers: dict[str, str] | None = None) -> None:
         try:
             env = json.loads(value)
         except ValueError:
             log.warning("ignoring malformed message on %s", topic)
             return
         # Long-running work happens in a task so the consumer keeps polling.
-        job = asyncio.create_task(self._dispatch(topic, env))
+        job = asyncio.create_task(self._dispatch(topic, env, extract_context(headers)))
         self._jobs.add(job)
         job.add_done_callback(self._jobs.discard)
 
-    async def _dispatch(self, topic: str, env: dict) -> None:
+    async def _dispatch(self, topic: str, env: dict, trace_ctx=None) -> None:
         try:
             if not await self._runner.claim_event(env["eventId"]):
                 return                                    # duplicate delivery
             wf, payload = env.get("workflowId"), env.get("payload", {})
             if topic == "workflow.started":
-                await self._runner.start_from_workflow(wf, payload["customerId"])
+                with span("workflow.run", context=trace_ctx, workflow_id=wf, trigger=topic):       # child of the request's trace
+                    await self._runner.start_from_workflow(wf, payload["customerId"])
             elif topic == "workflow.approval.decided":
                 if (await self._runner.snapshot(wf)).values:   # only runs this host started
-                    await self._runner.resume(wf)
+                    with span("workflow.resume", context=trace_ctx, workflow_id=wf, trigger=topic):
+                        await self._runner.resume(wf)
         except Exception:  # noqa: BLE001
             log.exception("failed to process %s event", topic)

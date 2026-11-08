@@ -1,12 +1,198 @@
 {
-  "name": "refund-exceeds-order-amount",
-  "status": "TODO - populated in Phase 7",
-  "input": {},
-  "expected_intent": null,
-  "expected_tools": [],
-  "expected_approval_required": null,
-  "expected_final_status": null,
-  "expected_guardrail_behavior": null,
-  "expected_rag_confidence": null,
-  "expected_citations": []
+ "scenario": "refund-exceeds-order-amount",
+ "description": "A refund larger than the order can never be issued, whoever asks: model guardrail, MCP guardrail and the payment service each refuse.",
+ "cases": [
+  {
+   "id": "rea-model-proposes-too-much",
+   "mode": "component",
+   "description": "The decision model proposes a refund of 999 on a 129.99 order.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 129.99,
+     "product": "PRD-100",
+     "shipment": {
+      "status": "LOST",
+      "delay_days": 5
+     }
+    },
+    "approval": "APPROVE"
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [
+     "initiate_refund"
+    ],
+    "must_not_call": []
+   },
+   "expected_approval_required": true,
+   "expected_final_status": "COMPLETED",
+   "expected_guardrail_behavior": {
+    "audit_events_present": [
+     "GUARDRAIL_OUTPUT_REJECTED"
+    ],
+    "audit_events_absent": [],
+    "kafka_topics_present": [],
+    "message_includes": [],
+    "message_includes_any": [],
+    "message_excludes": [],
+    "message_matches": [],
+    "message_must_not_match": [],
+    "errors_include": [
+     "GUARDRAIL_DECISION_REJECTED"
+    ]
+   },
+   "expected_rag_confidence": null,
+   "expected_citations": [],
+   "expected_state": {
+    "refund_amount_max": 129.99
+   },
+   "script": {
+    "decision": [
+     {
+      "action": "REFUND_ONLY",
+      "refund_amount": 999,
+      "approval_required": true,
+      "risk_level": "LOW",
+      "reason": "x",
+      "evidence": [
+       "e"
+      ]
+     },
+     {
+      "action": "REFUND_ONLY",
+      "refund_amount": 999,
+      "approval_required": true,
+      "risk_level": "LOW",
+      "reason": "x",
+      "evidence": [
+       "e"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "rea-payment-service-refuses",
+   "mode": "api",
+   "description": "Direct call to the payment service for 999 on a 129.99 order.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 129.99,
+     "product": "PRD-100",
+     "shipment": {
+      "status": "LOST",
+      "delay_days": 5
+     }
+    }
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [],
+    "must_not_call": []
+   },
+   "expected_approval_required": null,
+   "expected_final_status": null,
+   "expected_guardrail_behavior": {
+    "audit_events_present": [],
+    "audit_events_absent": [],
+    "kafka_topics_present": [],
+    "message_includes": [],
+    "message_includes_any": [],
+    "message_excludes": [],
+    "message_matches": [],
+    "message_must_not_match": [],
+    "errors_include": []
+   },
+   "expected_rag_confidence": null,
+   "expected_citations": [],
+   "expected_state": {
+    "refund_rows": 0
+   },
+   "api_steps": [
+    {
+     "method": "POST",
+     "service": "payment",
+     "path": "/api/payments/refunds",
+     "body": {
+      "workflowId": "WF-EVAL000001",
+      "orderId": "{order}",
+      "amount": 999,
+      "approvalId": "APR-NONE",
+      "idempotencyKey": "eval-over-{order}"
+     },
+     "expect_status": 422,
+     "expect_code": "REFUND_EXCEEDS_ORDER"
+    }
+   ]
+  },
+  {
+   "id": "rea-mcp-limit",
+   "mode": "mcp",
+   "description": "Through the MCP server: an amount over the 500 limit never reaches the payment service.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 129.99,
+     "product": "PRD-100",
+     "shipment": {
+      "status": "LOST",
+      "delay_days": 5
+     }
+    }
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [],
+    "must_not_call": []
+   },
+   "expected_approval_required": null,
+   "expected_final_status": null,
+   "expected_guardrail_behavior": {
+    "audit_events_present": [],
+    "audit_events_absent": [],
+    "kafka_topics_present": [],
+    "message_includes": [],
+    "message_includes_any": [],
+    "message_excludes": [],
+    "message_matches": [],
+    "message_must_not_match": [],
+    "errors_include": []
+   },
+   "expected_rag_confidence": null,
+   "expected_citations": [],
+   "expected_state": {
+    "refund_rows": 0
+   },
+   "mcp_steps": [
+    {
+     "tool": "initiate_refund",
+     "args": {
+      "workflow_id": "WF-EVAL000001",
+      "order_id": "{order}",
+      "amount": 999,
+      "approval_id": "APR-NONE",
+      "idempotency_key": "eval-mcp-{order}"
+     },
+     "expect_error_contains": "AMOUNT_OUT_OF_RANGE"
+    }
+   ]
+  }
+ ]
 }

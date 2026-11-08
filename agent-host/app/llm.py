@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections import defaultdict
 from typing import Any, TypeVar
 
@@ -10,6 +11,8 @@ from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel
 
 from app.config import Settings
+from app.observability import metrics as m
+from app.observability.tracing import end_span, start_span
 
 log = logging.getLogger("agent.llm")
 T = TypeVar("T", bound=BaseModel)
@@ -50,7 +53,7 @@ class UsageTracker(AsyncCallbackHandler):
     def __init__(self, budget: int):
         self.budget = budget
         self.by_agent: dict[str, dict[str, float]] = defaultdict(lambda: {"input": 0, "output": 0, "calls": 0, "cost_usd": 0.0})
-        self._agent_of_run: dict[Any, tuple[str, str]] = {}
+        self._agent_of_run: dict[Any, tuple[str, str, float, Any]] = {}
 
     @property
     def total_tokens(self) -> int:
@@ -66,10 +69,11 @@ class UsageTracker(AsyncCallbackHandler):
 
     async def on_chat_model_start(self, serialized, messages, *, run_id, metadata=None, **kwargs):
         meta = metadata or {}
-        self._agent_of_run[run_id] = (meta.get("agent", "unknown"), meta.get("ls_model_name", ""))
+        agent, model = meta.get("agent", "unknown"), meta.get("ls_model_name", "")
+        self._agent_of_run[run_id] = (agent, model, time.perf_counter(), start_span("llm.call", agent=agent, model=model))
 
     async def on_llm_end(self, response, *, run_id, **kwargs):
-        agent, model = self._agent_of_run.pop(run_id, ("unknown", ""))
+        agent, model, started, span = self._agent_of_run.pop(run_id, ("unknown", "", time.perf_counter(), None))
         usage = {}
         try:
             usage = response.generations[0][0].message.usage_metadata or {}
@@ -81,8 +85,16 @@ class UsageTracker(AsyncCallbackHandler):
         row["input"] += i
         row["output"] += o
         row["calls"] += 1
-        row["cost_usd"] += (i * price[0] + o * price[1]) / 1_000_000
+        cost = (i * price[0] + o * price[1]) / 1_000_000
+        row["cost_usd"] += cost
+        m.LLM_CALLS.labels(agent, model or "unknown").inc()
+        m.LLM_LATENCY.labels(agent, model or "unknown").observe(time.perf_counter() - started)
+        m.LLM_TOKENS.labels(agent, model or "unknown", "input").inc(i)
+        m.LLM_TOKENS.labels(agent, model or "unknown", "output").inc(o)
+        m.LLM_COST.labels(agent, model or "unknown").inc(cost)
+        end_span(span, input_tokens=i, output_tokens=o, cost_usd=round(cost, 6))
         if self.total_tokens > self.budget:
+            m.BUDGET_EXCEEDED.inc()
             raise BudgetExceeded(f"token budget {self.budget} exceeded")
 
 
@@ -121,5 +133,6 @@ class ModelFactory:
                 raise
             except Exception as e:  # noqa: BLE001
                 log.warning("%s model failed for %s: %s", label, agent, e)
+                m.RETRIES.labels("model_fallback" if label == "primary" else "model_failed").inc()
                 last = e
         raise RuntimeError(f"all models failed for {agent}: {last}")

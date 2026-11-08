@@ -27,9 +27,11 @@ public class ApprovalService {
     private final EventPublisher events;
     private final AuditClient audit;
     private final long ttlMinutes;
+    private final io.micrometer.core.instrument.MeterRegistry metrics;
 
-    public ApprovalService(JdbcClient jdbc, EventPublisher events, AuditClient audit,
+    public ApprovalService(JdbcClient jdbc, EventPublisher events, AuditClient audit, io.micrometer.core.instrument.MeterRegistry metrics,
                            @Value("${approval.ttl-minutes}") long ttlMinutes) {
+        this.metrics = metrics;
         this.jdbc = jdbc;
         this.events = events;
         this.audit = audit;
@@ -50,6 +52,7 @@ public class ApprovalService {
         payload.put("action", req.requestedAction());
         payload.put("amount", req.amount());
         payload.put("riskLevel", req.riskLevel());
+        metrics.counter("approval.requests").increment();
         events.publish("workflow.approval.requested", id, "ApprovalRequested", req.workflowId(), null, payload);
         audit.record(req.workflowId(), "approval-service", "APPROVAL_REQUESTED", CallerHolder.current().customerId(), payload);
         return get(id);
@@ -64,6 +67,7 @@ public class ApprovalService {
         if ("PENDING".equals(a.status()) && a.expiresAt() != null && a.expiresAt().isBefore(LocalDateTime.now())) {
             jdbc.sql("UPDATE approval_request SET status = 'EXPIRED' WHERE approval_id = :id AND status = 'PENDING'")
                     .param("id", id).update();
+            metrics.counter("approval.decisions", "decision", "EXPIRED").increment();
             audit.record(a.workflowId(), "approval-service", "APPROVAL_EXPIRED", null, Map.of("approvalId", id));
             return jdbc.sql("SELECT " + COLS + " FROM approval_request WHERE approval_id = :id")
                     .param("id", id).query(Approval.class).single();
@@ -101,6 +105,8 @@ public class ApprovalService {
         payload.put("decision", decision);
         payload.put("decidedBy", req.decidedBy());
         payload.put("comment", req.comment());
+        metrics.counter("approval.decisions", "decision", decision).increment();
+        metrics.timer("approval.decision.time", "decision", decision).record(java.time.Duration.between(current.createdAt(), java.time.LocalDateTime.now()));
         events.publish("workflow.approval.decided", id, "ApprovalDecided", current.workflowId(), null, payload);
         audit.record(current.workflowId(), "approval-service", "APPROVAL_" + decision, req.decidedBy(), payload);
         return get(id);

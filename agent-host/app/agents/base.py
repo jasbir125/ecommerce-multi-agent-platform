@@ -10,6 +10,7 @@ from langchain_core.runnables import RunnableConfig
 from app.graph.deps import Deps, RunContext
 from app.guardrails.tool_guardrails import guard_tools
 from app.mcp.tool_loader import parse_tool_result
+from app.observability import metrics as m
 
 SHARED_RULES = """Rules you must follow:
 - Use only information returned by your tools. Never invent order, shipment, policy, price or stock facts.
@@ -27,6 +28,7 @@ async def run_react(deps: Deps, ctx: RunContext, agent: str, system: str, prompt
                          response_format=response_format, checkpointer=False)
     cfg = {**config, "recursion_limit": 14, "metadata": {**config.get("metadata", {}), "agent": agent}}
     result = await graph.ainvoke({"messages": [HumanMessage(prompt)]}, config=cfg)
+    m.REACT_ITERATIONS.labels(agent).observe(sum(1 for x in result["messages"] if getattr(x, "type", "") == "ai"))
     final = result["messages"][-1].content
     text = final if isinstance(final, str) else "".join(b.get("text", "") for b in final if isinstance(b, dict))
     return text, result.get("structured_response")

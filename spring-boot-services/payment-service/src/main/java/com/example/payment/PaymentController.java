@@ -1,5 +1,6 @@
 package com.example.payment;
 
+import com.example.common.security.CallerHolder;
 import com.example.payment.PaymentRecords.*;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -16,6 +17,7 @@ public class PaymentController {
 
     @PostMapping
     public Refund initiate(@Valid @RequestBody RefundRequest request) {
+        CallerHolder.requireInternal();
         return service.initiate(request);
     }
 

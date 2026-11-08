@@ -24,6 +24,7 @@ ap.add_argument("--width", type=int, default=1500)
 ap.add_argument("--wait", type=float, default=12)
 ap.add_argument("--click", action="append", default=[], help="visible text of a tab/button to click before capturing (repeatable)")
 ap.add_argument("--port", type=int, default=9333)
+ap.add_argument("--header", action="append", default=[], help="extra request header, e.g. 'Authorization: Basic ...' (repeatable)")
 args = ap.parse_args()
 
 
@@ -53,6 +54,9 @@ async def main() -> None:
                         return msg.get("result", {})
 
             await send("Emulation.setDeviceMetricsOverride", width=args.width, height=1000, deviceScaleFactor=1, mobile=False)
+            if args.header:
+                await send("Network.enable")
+                await send("Network.setExtraHTTPHeaders", headers=dict(h.split(": ", 1) for h in args.header))
             await send("Page.navigate", url=args.url)
             await asyncio.sleep(args.wait)
             for text in args.click:

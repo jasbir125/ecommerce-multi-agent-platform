@@ -1,5 +1,5 @@
 # Convenience targets. Run `make help` for the list.
-.PHONY: eval-rag eval-rag-holdout help env infra up down logs ps topics psql build-java run-agent test-agent run-mcp test-mcp run-ui test-ui ui-smoke clean
+.PHONY: eval-golden eval-component eval-security dashboards eval-rag eval-rag-holdout help env infra up down logs ps topics psql build-java run-agent test-agent run-mcp test-mcp run-ui test-ui ui-smoke clean
 
 help:        ## Show this help
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -65,3 +65,18 @@ eval-rag:    ## RAG quality: retrieval + answers + ingestion lifecycle (stack ru
 
 eval-rag-holdout: ## RAG quality on unseen questions (informational)
 	$(PY) evaluation/rag/run_answer_eval.py --set golden_holdout --no-poison
+
+eval-component: ## golden datasets, component mode (no stack needed)
+	$(PY) -m evaluation.evaluators.run_golden --mode component
+
+eval-golden: ## golden datasets against the live stack (fault injection enabled only for the run)
+	PLATFORM_FAULTS_ENABLED=true docker compose --profile apps up -d order-service inventory-service shipment-service
+	sleep 25
+	$(PY) -m evaluation.evaluators.run_golden --mode live; rc=$$?; \
+	docker compose --profile apps up -d --force-recreate order-service inventory-service shipment-service; exit $$rc
+
+eval-security: ## 81 live security checks
+	$(PY) evaluation/security/run_security_checks.py
+
+dashboards: ## regenerate and validate Grafana dashboards
+	$(PY) infra/grafana/build_dashboards.py && $(PY) infra/grafana/validate_dashboards.py

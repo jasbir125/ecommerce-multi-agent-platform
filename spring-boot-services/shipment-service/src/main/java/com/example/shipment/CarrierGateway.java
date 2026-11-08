@@ -17,13 +17,16 @@ import org.springframework.stereotype.Component;
 public class CarrierGateway {
 
     private final JdbcClient jdbc;
+    private final com.example.common.security.FaultInjector faults;
 
-    public CarrierGateway(JdbcClient jdbc) {
+    public CarrierGateway(JdbcClient jdbc, com.example.common.security.FaultInjector faults) {
         this.jdbc = jdbc;
+        this.faults = faults;
     }
 
     @CircuitBreaker(name = "carrier", fallbackMethod = "unavailable")
     public Optional<Row> track(String orderId) {
+        faults.check("shipment", "carrier", orderId);      // test-only: the carrier API is down
         return jdbc.sql("""
                 SELECT order_id, customer_id, carrier, tracking_no, status, expected_delivery, delay_days, last_event
                 FROM shipment WHERE order_id = :id""").param("id", orderId).query(Row.class).optional();

@@ -1,12 +1,216 @@
 {
-  "name": "invalid-model-output",
-  "status": "TODO - populated in Phase 7",
-  "input": {},
-  "expected_intent": null,
-  "expected_tools": [],
-  "expected_approval_required": null,
-  "expected_final_status": null,
-  "expected_guardrail_behavior": null,
-  "expected_rag_confidence": null,
-  "expected_citations": []
+ "scenario": "invalid-model-output",
+ "description": "The decision model returns something unusable or unsafe: guardrails reject it and a deterministic fallback decides. Runs in-process with a scripted model.",
+ "cases": [
+  {
+   "id": "imo-invalid-action",
+   "mode": "component",
+   "description": "The model returns an action that does not exist.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 129.99,
+     "product": "PRD-100",
+     "shipment": {
+      "status": "LOST",
+      "delay_days": 5
+     }
+    },
+    "approval": "APPROVE"
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [
+     "create_approval_request",
+     "initiate_refund"
+    ],
+    "must_not_call": []
+   },
+   "expected_approval_required": true,
+   "expected_final_status": "COMPLETED",
+   "expected_guardrail_behavior": {
+    "audit_events_present": [],
+    "audit_events_absent": [],
+    "kafka_topics_present": [],
+    "message_includes": [],
+    "message_includes_any": [],
+    "message_excludes": [],
+    "message_matches": [],
+    "message_must_not_match": [],
+    "errors_include": [
+     "DECISION_MODEL_ERROR",
+     "DECISION_RULE_FALLBACK"
+    ]
+   },
+   "expected_rag_confidence": null,
+   "expected_citations": [],
+   "expected_state": {
+    "refund_amount_max": 129.99
+   },
+   "script": {
+    "decision": [
+     {
+      "__raise__": "invalid action REFUND_EVERYTHING"
+     }
+    ]
+   }
+  },
+  {
+   "id": "imo-unsafe-proposal",
+   "mode": "component",
+   "description": "The model proposes a refund above the order amount and says no approval is needed, twice.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 129.99,
+     "product": "PRD-100",
+     "shipment": {
+      "status": "LOST",
+      "delay_days": 5
+     }
+    },
+    "approval": "APPROVE"
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [
+     "create_approval_request",
+     "initiate_refund"
+    ],
+    "must_not_call": []
+   },
+   "expected_approval_required": true,
+   "expected_final_status": "COMPLETED",
+   "expected_guardrail_behavior": {
+    "audit_events_present": [
+     "GUARDRAIL_OUTPUT_REJECTED"
+    ],
+    "audit_events_absent": [],
+    "kafka_topics_present": [],
+    "message_includes": [],
+    "message_includes_any": [],
+    "message_excludes": [],
+    "message_matches": [],
+    "message_must_not_match": [],
+    "errors_include": [
+     "GUARDRAIL_DECISION_REJECTED",
+     "DECISION_RULE_FALLBACK"
+    ]
+   },
+   "expected_rag_confidence": null,
+   "expected_citations": [],
+   "expected_state": {
+    "refund_amount_max": 129.99
+   },
+   "script": {
+    "decision": [
+     {
+      "action": "REFUND_ONLY",
+      "refund_amount": 999,
+      "approval_required": false,
+      "risk_level": "LOW",
+      "reason": "x",
+      "evidence": [
+       "e"
+      ]
+     },
+     {
+      "action": "REFUND_ONLY",
+      "refund_amount": 999,
+      "approval_required": false,
+      "risk_level": "LOW",
+      "reason": "x",
+      "evidence": [
+       "e"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "imo-replacement-not-in-catalog",
+   "mode": "component",
+   "description": "The model invents a product id.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 129.99,
+     "product": "PRD-100",
+     "shipment": {
+      "status": "LOST",
+      "delay_days": 5
+     }
+    },
+    "approval": "APPROVE"
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [],
+    "must_not_call": []
+   },
+   "expected_approval_required": true,
+   "expected_final_status": "COMPLETED",
+   "expected_guardrail_behavior": {
+    "audit_events_present": [
+     "GUARDRAIL_OUTPUT_REJECTED"
+    ],
+    "audit_events_absent": [],
+    "kafka_topics_present": [],
+    "message_includes": [],
+    "message_includes_any": [],
+    "message_excludes": [],
+    "message_matches": [],
+    "message_must_not_match": [],
+    "errors_include": [
+     "REPLACEMENT_NOT_IN_CATALOG_RESULTS"
+    ]
+   },
+   "expected_rag_confidence": null,
+   "expected_citations": [],
+   "expected_state": {
+    "replacement_product_not": "PRD-9999"
+   },
+   "script": {
+    "decision": [
+     {
+      "action": "REFUND_AND_REPLACE",
+      "refund_amount": 129.99,
+      "replacement_product_id": "PRD-9999",
+      "approval_required": true,
+      "risk_level": "LOW",
+      "reason": "x",
+      "evidence": [
+       "e"
+      ]
+     },
+     {
+      "action": "REFUND_AND_REPLACE",
+      "refund_amount": 129.99,
+      "replacement_product_id": "PRD-9999",
+      "approval_required": true,
+      "risk_level": "LOW",
+      "reason": "x",
+      "evidence": [
+       "e"
+      ]
+     }
+    ]
+   }
+  }
+ ]
 }

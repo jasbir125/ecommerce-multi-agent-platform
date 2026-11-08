@@ -28,9 +28,10 @@ public class WorkflowService {
     private final TransactionTemplate tx;
     private final RestClient orders;
     private final RestClient auditApi;
+    private final io.micrometer.core.instrument.MeterRegistry metrics;
 
     public WorkflowService(WorkflowRepository repo, InputGuardrails guardrails, EventPublisher events, AuditClient audit,
-                           TransactionTemplate tx, PlatformRestClient clients,
+                           TransactionTemplate tx, PlatformRestClient clients, io.micrometer.core.instrument.MeterRegistry metrics,
                            @Value("${services.order-url}") String orderUrl, @Value("${services.audit-url}") String auditUrl) {
         this.repo = repo;
         this.guardrails = guardrails;
@@ -39,6 +40,7 @@ public class WorkflowService {
         this.tx = tx;
         this.orders = clients.forBaseUrl(orderUrl);
         this.auditApi = clients.forBaseUrl(auditUrl);
+        this.metrics = metrics;
     }
 
     /** Creates a workflow once per requestId (retries return the same workflow). */
@@ -86,6 +88,7 @@ public class WorkflowService {
         if (!inserted) {
             return repo.findByRequestId(requestId).orElseThrow();
         }
+        metrics.counter("workflow.transitions", "status", "STARTED").increment();
         audit.record(workflowId, "workflow-service", "WORKFLOW_STARTED", customerId, Map.of("orderId", req.orderId()));
         return repo.findById(workflowId).orElseThrow();
     }
@@ -107,6 +110,7 @@ public class WorkflowService {
      * is a no-op. A stale read (another writer got there first) returns 409.
      */
     public Workflow resume(String workflowId, ResumeRequest req) {
+        CallerHolder.requireInternal();                       // only the agent host may move a workflow; an end-user token cannot
         CallerHolder.requireRole("OPERATOR", "ADMIN", "AGENT");
         Workflow w = get(workflowId);
         return applyTransition(w, req.idempotencyKey(), req.targetStatus().toUpperCase(), req.statePatch(), req.reason());
@@ -136,6 +140,10 @@ public class WorkflowService {
             }
             publishTransition(w, target, reason);
         });
+        metrics.counter("workflow.transitions", "status", target).increment();
+        if (WorkflowStatus.isTerminalStatus(target)) {
+            metrics.timer("workflow.end.to.end", "status", target).record(java.time.Duration.between(w.createdAt(), java.time.LocalDateTime.now()));
+        }
         audit.record(w.workflowId(), "workflow-service", "WORKFLOW_" + target, CallerHolder.current().customerId(),
                 Map.of("from", w.status(), "reason", String.valueOf(reason)));
         return repo.findById(w.workflowId()).orElseThrow();

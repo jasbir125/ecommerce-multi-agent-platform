@@ -22,8 +22,13 @@ public class InventoryService {
     private final JdbcClient jdbc;
     private final EventPublisher events;
     private final AuditClient audit;
+    private final io.micrometer.core.instrument.MeterRegistry metrics;
+    private final com.example.common.security.FaultInjector faults;
 
-    public InventoryService(JdbcClient jdbc, EventPublisher events, AuditClient audit) {
+    public InventoryService(JdbcClient jdbc, EventPublisher events, AuditClient audit, io.micrometer.core.instrument.MeterRegistry metrics,
+                            com.example.common.security.FaultInjector faults) {
+        this.faults = faults;
+        this.metrics = metrics;
         this.jdbc = jdbc;
         this.events = events;
         this.audit = audit;
@@ -58,12 +63,14 @@ public class InventoryService {
         if (existing.isPresent()) {
             return existing.get();
         }
+        faults.check("inventory", "reserve", req.workflowId());
         int updated = jdbc.sql("""
                 UPDATE product SET available_qty = available_qty - :q, reserved_qty = reserved_qty + :q
                 WHERE product_id = :p AND available_qty >= :q""")
                 .param("q", req.quantity()).param("p", req.productId()).update();
         if (updated == 0) {
             get(req.productId()); // 404 if the product does not exist at all
+            metrics.counter("inventory.reservations", "result", "out_of_stock").increment();
             throw new ApiException(HttpStatus.CONFLICT, "OUT_OF_STOCK", "Insufficient stock for " + req.productId());
         }
         String id = Ids.next("RSV");
@@ -72,6 +79,7 @@ public class InventoryService {
                 VALUES (:id, :wf, :p, :q, 'RESERVED', :k)""")
                 .param("id", id).param("wf", req.workflowId()).param("p", req.productId())
                 .param("q", req.quantity()).param("k", req.idempotencyKey()).update();
+        metrics.counter("inventory.reservations", "result", "reserved").increment();
         events.publish("inventory.reservation.completed", id, "InventoryReserved", req.workflowId(), null,
                 Map.of("reservationId", id, "productId", req.productId(), "quantity", req.quantity()));
         audit.record(req.workflowId(), "inventory-service", "INVENTORY_RESERVED", null,
@@ -98,6 +106,7 @@ public class InventoryService {
             jdbc.sql("""
                     UPDATE product SET available_qty = available_qty + :q, reserved_qty = reserved_qty - :q
                     WHERE product_id = :p""").param("q", r.quantity()).param("p", r.productId()).update();
+            metrics.counter("inventory.reservations", "result", "released").increment();
             events.publish("inventory.reservation.released", id, "InventoryReleased", r.workflowId(), null,
                     Map.of("reservationId", id, "productId", r.productId(), "quantity", r.quantity()));
             audit.record(r.workflowId(), "inventory-service", "INVENTORY_RELEASED", null, Map.of("reservationId", id));

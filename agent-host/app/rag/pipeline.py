@@ -14,10 +14,12 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from app.llm import BudgetExceeded
+from app.observability import metrics as m
+from app.observability.tracing import span
 from app.rag.answer_cache import AnswerCache, make_key
 from app.rag.context_builder import apply_region_precedence, build_context
 from app.rag.grounding_validator import content_stems, describe, validate
-from app.rag.models import (INSUFFICIENT_ANSWER, Chunk, ContextPack, GroundedAnswer, GroundingReport, RagResult, RagSource,
+from app.rag.models import (INSUFFICIENT_ANSWER, INSTRUCTION_LIKE, Chunk, ContextPack, GroundedAnswer, GroundingReport, RagResult, RagSource,
                             Statement)
 from app.rag.query_rewriter import clean_query, merge_queries
 from app.rag.reranker import Ranking, apply_ranking
@@ -72,6 +74,7 @@ class RagPipeline:
         cached = await self.cache.get(key)
         if cached is not None:
             cached.diagnostics = {**cached.diagnostics, "cacheHit": True, "latencyMs": self._ms(t0)}
+            m.RAG_ANSWERS.labels("cache_hit").inc()
             return cached
 
         # 3. rewrite (best effort) and search the extra query variants in parallel
@@ -88,6 +91,9 @@ class RagPipeline:
                 diag["stages"].append({"stage": "retrieve-extra", "error": str(e)[:150]})   # the first retrieval still stands
         ret = self.retriever.merge(raw)
         chunks: list[Chunk] = ret["chunks"]
+        m.RAG_RELEVANCE.observe(ret["confidence"])
+        if ret["degraded"]:
+            m.RAG_DEGRADED.inc()
         diag["retrieval"] = {"confidence": ret["confidence"], "candidates": len(chunks), "degraded": ret["degraded"],
                              "corpusVersion": corpus, "serviceCacheHits": ret["cache_hits"]}
         if not chunks or ret["confidence"] < self.s.min_retrieval_confidence:
@@ -97,7 +103,7 @@ class RagPipeline:
 
         # 4. rerank with the model (listwise); keep retrieval order if it fails or returns nonsense
         relevance_confirmed: bool | None = None
-        if self.s.use_llm_rerank and len(chunks) > 1:
+        if self.s.use_llm_rerank and chunks:      # also for a single passage: relevance can veto it
             head = chunks[:8]
             ranking = await self._stage("rerank", diag, lambda: self.llm.rerank(question, head, scope), default=None)
             reordered = apply_ranking(head, ranking) if ranking else None
@@ -113,6 +119,11 @@ class RagPipeline:
         # 5. context within the token budget
         pack = build_context(question, chunks[: self.s.top_k + 2], self.s.max_context_tokens, self.s.top_k)
         pack.dropped += overridden
+        # Injection attempts must be reported even when the chunk was ranked out of the evidence window.
+        seen_ids = {d.split(":", 1)[1] for d in pack.dropped if ":" in d}
+        for c in chunks:
+            if c.chunk_id not in seen_ids and (c.injection_suspected or INSTRUCTION_LIKE.search(c.text or "")):
+                pack.dropped.append(f"{'withheld' if c.injection_suspected else 'injection'}:{c.chunk_id}")
         diag["context"] = {"items": len(pack.items), "tokens": pack.tokens, "dropped": pack.dropped}
         diag["candidates"] = candidates_report(chunks, pack, set())
         if not pack.items:
@@ -145,6 +156,10 @@ class RagPipeline:
             if ans.insufficient_evidence:
                 return [], GroundingReport(passed=True, score=1.0), attempt, False
             report = validate(ans.statements, pack, self.s.min_support)
+            m.RAG_VALIDATION.labels("passed" if report.passed else "rejected").inc()
+            for issue in report.issues:
+                m.RAG_VALIDATION_ISSUES.labels(issue.code).inc()
+                m.guardrail("rag", issue.code)
             if report.passed:
                 return ans.statements, report, attempt, False
             feedback = describe(report)
@@ -177,11 +192,15 @@ class RagPipeline:
         confidence = round(min(1.0, 0.4 * retrieval_conf + 0.3 * relevance + 0.3 * report.score), 3)
         diag["latencyMs"] = self._ms(t0)
         diag["cacheHit"] = False
+        m.RAG_ANSWERS.labels("extractive_fallback" if diag.get("generation", {}).get("extractiveFallback") else "grounded").inc()
+        m.RAG_CONFIDENCE.observe(confidence)
+        m.RAG_RERANK_TOP.observe(max((s.rerankScore for s in sources), default=0.0))
         return RagResult(answer=answer, confidence=confidence, grounded=report.passed, policyVersion=sources[0].version,
                          sources=sources, insufficientEvidence=False, diagnostics=diag)
 
     def _insufficient(self, reason: str, diag: dict[str, Any], t0: float, unavailable: bool = False) -> RagResult:
         diag.update(reason=reason, latencyMs=self._ms(t0), cacheHit=False, unavailable=unavailable)
+        m.RAG_ANSWERS.labels("unavailable" if unavailable else "insufficient").inc()
         return RagResult(answer=INSUFFICIENT_ANSWER, confidence=0.2, grounded=False, policyVersion=None, sources=[],
                          insufficientEvidence=True, diagnostics=diag)
 
@@ -200,9 +219,11 @@ class RagPipeline:
     async def _timed(self, name: str, diag: dict[str, Any], awaitable):
         t = time.perf_counter()
         try:
-            return await awaitable
+            with span(f"rag.{name}"):
+                return await awaitable
         finally:
             diag["timingsMs"][name] = diag["timingsMs"].get(name, 0) + self._ms(t)
+            m.RAG_STAGE.labels(name).observe(time.perf_counter() - t)
 
     @staticmethod
     def _scope(filters: dict[str, Any]) -> str:

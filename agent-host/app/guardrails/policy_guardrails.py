@@ -15,4 +15,7 @@ def policy_violations(policy: PolicyDecision | None, min_confidence: float) -> l
         out.append("MISSING_CITATIONS")
     if not policy.policy_key or not policy.policy_version:
         out.append("MISSING_POLICY_VERSION")
+    # The evidence must be about the same version the deterministic check used (e.g. not the superseded v1 text).
+    if any(c.policy_key == policy.policy_key and c.version != policy.policy_version for c in policy.citations):
+        out.append("POLICY_VERSION_MISMATCH")
     return out

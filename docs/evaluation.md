@@ -32,3 +32,11 @@ The full pipeline fixed both, because query rewriting rescued the first and the 
 ## Workflow and guardrails
 Unit tests: agent-host 106, policy-service 44, MCP servers 39, Streamlit UI 48 (headless renders with `AppTest`). Live scenario scripts: `agent-host/scripts/e2e_demo.py`, `mcp-servers/scripts/smoke_test.py`, `streamlit-ui/scripts/live_smoke.py` (drives the real UI through request, approval, resume, inspection and admin).
 The 14-scenario workflow datasets listed in `evaluation/golden-datasets/` are filled in Phase 7.
+
+## Golden datasets (Phase 7)
+
+`evaluation/golden-datasets/*.json` (14 files, 29 cases) run in modes `component` (no stack), `live`, `api`, `mcp`, `rag`.
+
+- `make eval-component` – fast, deterministic.
+- `make eval-golden` – real stack and model; fault injection is enabled only for the run. Set `POSTGRES_HOST_PORT` if Postgres is not on 5432.
+- `make eval-security` – security checks.

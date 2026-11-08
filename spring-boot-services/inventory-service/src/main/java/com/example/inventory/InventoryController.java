@@ -1,5 +1,6 @@
 package com.example.inventory;
 
+import com.example.common.security.CallerHolder;
 import com.example.inventory.InventoryRecords.*;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
@@ -31,16 +32,19 @@ public class InventoryController {
 
     @PostMapping("/inventory/reservations")
     public Reservation reserve(@Valid @RequestBody ReservationRequest request) {
+        CallerHolder.requireInternal();
         return service.reserve(request);
     }
 
     @GetMapping("/inventory/reservations/{reservationId}")
     public Reservation getReservation(@PathVariable String reservationId) {
+        CallerHolder.requireInternal();
         return service.getReservation(reservationId);
     }
 
     @PostMapping("/inventory/reservations/{reservationId}/release")
     public Reservation release(@PathVariable String reservationId) {
+        CallerHolder.requireInternal();
         return service.release(reservationId);
     }
 }

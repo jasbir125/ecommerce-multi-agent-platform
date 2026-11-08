@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     model_rag_reranker: str | None = None
     model_rag_generator: str | None = None
 
+    # --- security -----------------------------------------------------------------
+    platform_env: str = "dev"                       # "production" refuses the demo token and requires JWT verification
+    auth_jwks_url: str | None = None                # end-user tokens are verified against this JWKS (RS256)
+    auth_issuer: str = "order-recovery-auth"
+    auth_audience: str = "order-recovery-api"
+    max_body_bytes: int = 65536
+
     # --- guardrail limits -------------------------------------------------------
     max_message_length: int = 2000
     run_token_budget: int = 60000                   # per workflow run, all agents

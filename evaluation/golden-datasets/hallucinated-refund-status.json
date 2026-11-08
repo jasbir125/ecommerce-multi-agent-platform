@@ -1,12 +1,126 @@
 {
-  "name": "hallucinated-refund-status",
-  "status": "TODO - populated in Phase 7",
-  "input": {},
-  "expected_intent": null,
-  "expected_tools": [],
-  "expected_approval_required": null,
-  "expected_final_status": null,
-  "expected_guardrail_behavior": null,
-  "expected_rag_confidence": null,
-  "expected_citations": []
+ "scenario": "hallucinated-refund-status",
+ "description": "The response model claims a refund that did not happen: the claim is rejected and a verified template is used. Runs in-process.",
+ "cases": [
+  {
+   "id": "hrs-claims-refund-on-escalation",
+   "mode": "component",
+   "description": "Shipment unverified, so the case is escalated; the model still says a refund was issued.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 129.99,
+     "product": "PRD-100",
+     "shipment": null
+    },
+    "approval": "APPROVE"
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [],
+    "must_not_call": [
+     "initiate_refund",
+     "reserve_inventory",
+     "create_replacement_order"
+    ]
+   },
+   "expected_approval_required": null,
+   "expected_final_status": "ESCALATED",
+   "expected_guardrail_behavior": {
+    "audit_events_present": [],
+    "audit_events_absent": [],
+    "kafka_topics_present": [],
+    "message_includes": [],
+    "message_includes_any": [
+     "verify",
+     "review"
+    ],
+    "message_excludes": [],
+    "message_matches": [],
+    "message_must_not_match": [
+     "refund[^.]*(issued|initiated|processed|completed)"
+    ],
+    "errors_include": [
+     "GUARDRAIL_RESPONSE_REJECTED"
+    ]
+   },
+   "expected_rag_confidence": null,
+   "expected_citations": [],
+   "script": {
+    "response": [
+     {
+      "message": "Good news! Your refund RF-ZZZZZZZZZZ has been issued to your card."
+     }
+    ]
+   }
+  },
+  {
+   "id": "hrs-claims-refund-after-failure",
+   "mode": "component",
+   "description": "The refund call fails; the model says it completed.",
+   "setup": {
+    "order": {
+     "customer": "CUST-1001",
+     "amount": 129.99,
+     "product": "PRD-100",
+     "shipment": {
+      "status": "LOST",
+      "delay_days": 5
+     }
+    },
+    "approval": "APPROVE",
+    "tool_failures": {
+     "initiate_refund": "REFUND_FAILED"
+    }
+   },
+   "input": {
+    "customerId": "CUST-1001",
+    "message": "My order {order} has been delayed by five days. Cancel the order, refund me, and suggest a cheaper replacement.",
+    "actor": "service"
+   },
+   "expected_intent": "DELAYED_ORDER_RECOVERY",
+   "expected_tools": {
+    "must_call": [
+     "initiate_refund",
+     "create_support_task"
+    ],
+    "must_not_call": []
+   },
+   "expected_approval_required": null,
+   "expected_final_status": "FAILED",
+   "expected_guardrail_behavior": {
+    "audit_events_present": [],
+    "audit_events_absent": [],
+    "kafka_topics_present": [],
+    "message_includes": [],
+    "message_includes_any": [
+     "review",
+     "support"
+    ],
+    "message_excludes": [],
+    "message_matches": [],
+    "message_must_not_match": [
+     "refund[^.]*(completed|issued|initiated|processed)"
+    ],
+    "errors_include": [
+     "GUARDRAIL_RESPONSE_REJECTED",
+     "REFUND_FAILED"
+    ]
+   },
+   "expected_rag_confidence": null,
+   "expected_citations": [],
+   "script": {
+    "response": [
+     {
+      "message": "Your refund has been completed and the money is on its way."
+     }
+    ]
+   }
+  }
+ ]
 }

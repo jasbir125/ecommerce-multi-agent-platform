@@ -1,10 +1,12 @@
 package com.example.common.events;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /** Idempotent-consumer helper: the first caller for (consumer, eventId) wins. */
 @Component
+@ConditionalOnProperty(name = "platform.messaging.enabled", havingValue = "true", matchIfMissing = true)
 public class InboxGuard {
 
     private final JdbcClient jdbc;

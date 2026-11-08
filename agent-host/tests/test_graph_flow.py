@@ -199,3 +199,26 @@ async def test_unverified_shipment_escalates_without_asking_for_a_refund(env, mo
 
 
 
+
+
+async def test_every_tool_call_a_step_makes_is_recorded_in_that_steps_trace(env):
+    """Deterministic steps (approval request, refund, reserve...) call tools through the gateway; the trace must show them."""
+    from app.mcp.client import McpGateway
+
+    graph, state, cfg, gw, deps, _ = env
+
+    class RecordingGateway(FakeGateway):
+        async def call(self, name, args):
+            from app.observability.context import CURRENT_NODE
+            out = await super().call(name, args)
+            self.call_log.append({"node": CURRENT_NODE.get(), "tool": name, "ok": True, "error": None})
+            return out
+    rec = RecordingGateway()
+    rec.call_log = []
+    deps.ensure(WF, "CUST-1001", "ORD-7842").gateway = rec
+    await graph.ainvoke(state, cfg)
+    rec.approval = "APPROVED"
+    await graph.ainvoke(Command(resume="x"), cfg)
+    trace = {t["agent"]: t for t in (await graph.aget_state(cfg)).values["trace"]}
+    assert [c["tool"] for c in trace["approval_request"]["tool_calls"]] == ["create_approval_request"]
+    assert {"initiate_refund", "reserve_inventory", "create_replacement_order"} <= {c["tool"] for c in trace["execute"]["tool_calls"]}

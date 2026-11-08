@@ -4,7 +4,8 @@ from __future__ import annotations
 import logging
 from contextlib import AsyncExitStack, asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from app.api.routes import router
 from app.config import get_settings
@@ -13,8 +14,10 @@ from app.graph.deps import Deps
 from app.graph.supervisor_graph import build_graph
 from app.kafka_consumer import TriggerConsumer
 from app.llm import ModelFactory
-from app.observability.tracing import setup_tracing
+from app.observability.tracing import instrument_app, setup_tracing
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from app.runner import RunManager
+from app.security import JwtVerifier, check_startup
 from app.services.workflow_client import WorkflowClient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -53,7 +56,7 @@ async def make_checkpointer(stack: AsyncExitStack, settings):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
-    setup_tracing(settings.otel_http_endpoint)
+    check_startup(settings)
     async with AsyncExitStack() as stack:
         redis = None
         try:
@@ -67,6 +70,7 @@ async def lifespan(app: FastAPI):
         graph = build_graph(await make_checkpointer(stack, settings))
         runner = RunManager(settings, deps, graph, redis)
         app.state.settings, app.state.runner = settings, runner
+        app.state.jwt = JwtVerifier(settings.auth_jwks_url, settings.auth_issuer, settings.auth_audience) if settings.auth_jwks_url else None
         consumer = None
         if settings.agent_kafka_enabled:
             consumer = TriggerConsumer(settings.kafka_bootstrap_servers, runner)
@@ -78,8 +82,30 @@ async def lifespan(app: FastAPI):
         await deps.workflows.aclose()
 
 
+setup_tracing(get_settings().otel_http_endpoint)          # before the app is built so incoming requests are traced
 app = FastAPI(title="agent-host", lifespan=lifespan)
 app.include_router(router)
+instrument_app(app)
+
+
+@app.middleware("http")
+async def harden(request: Request, call_next):
+    """Cap request bodies and add security headers."""
+    limit = get_settings().max_body_bytes
+    length = request.headers.get("content-length")
+    if length and length.isdigit() and int(length) > limit:
+        return JSONResponse({"detail": {"code": "PAYLOAD_TOO_LARGE", "message": f"request body over {limit} bytes"}}, status_code=413)
+    response = await call_next(request)
+    response.headers.update({"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Cache-Control": "no-store",
+                             "Referrer-Policy": "no-referrer"})
+    return response
+
+
+@app.get("/metrics", include_in_schema=False)
+async def prometheus_metrics():
+    """Prometheus scrape endpoint (internal network only; carries no customer data)."""
+    from fastapi import Response
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/health")
