@@ -34,7 +34,17 @@ public class ApprovalDecisionListener {
     @KafkaListener(topics = "workflow.approval.decided")
     public void onDecision(String message) throws Exception {
         EventEnvelope env = mapper.readValue(message, EventEnvelope.class);
+        try {
+            handle(env);
+        } finally {
+            com.example.common.events.EventLog.done();
+        }
+    }
+
+    private void handle(EventEnvelope env) {
+        com.example.common.events.EventLog.received(log, "workflow-service.approval", env, mapper);
         if (!inbox.firstTime("workflow-service.approval", env.eventId())) {
+            com.example.common.events.EventLog.duplicate(log, "workflow-service.approval", env);
             return;
         }
         var wf = repo.findById(env.workflowId());

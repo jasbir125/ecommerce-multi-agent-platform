@@ -17,7 +17,10 @@ from fastmcp.server.middleware import Middleware, MiddlewareContext
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from starlette.responses import Response
 
+from . import logsetup
+
 log = logging.getLogger("mcp.observability")
+tool_log = logging.getLogger("mcp.tool")
 TOOL_CALLS = Counter("mcp_tool_calls", "MCP tool calls", ["server", "tool", "result"])
 TOOL_LATENCY = Histogram("mcp_tool_latency_seconds", "MCP tool call duration", ["server", "tool"],
                          buckets=(.01, .025, .05, .1, .25, .5, 1, 2, 5, 10))
@@ -58,6 +61,10 @@ class ObservabilityMiddleware(Middleware):
     async def on_call_tool(self, context: MiddlewareContext, call_next):
         tool = getattr(context.message, "name", "unknown")
         start = time.perf_counter()
+        h = get_http_headers(include_all=True)
+        tokens = (logsetup.corr.set(h.get("x-correlation-id") or "-"), logsetup.wf.set(h.get("x-workflow-id") or "-"),
+                  logsetup.customer.set(h.get("x-customer-id") or "-"))
+        tool_log.info("TOOL IN  %s args=%s", tool, logsetup.clean(getattr(context.message, "arguments", None)))
         span_cm = None
         if _tracer is not None:
             from opentelemetry import propagate, trace
@@ -68,10 +75,13 @@ class ObservabilityMiddleware(Middleware):
         try:
             result = await call_next(context)
             TOOL_CALLS.labels(self.server, tool, "ok").inc()
+            tool_log.info("TOOL OUT %s ok %.0fms result=%s", tool, (time.perf_counter() - start) * 1000,
+                          logsetup.clean(getattr(result, "structured_content", None) or [getattr(c, "text", c) for c in getattr(result, "content", [])]))
             return result
         except Exception as e:  # noqa: BLE001
             m = _CODE.match(str(e))
             TOOL_CALLS.labels(self.server, tool, "error").inc()
+            tool_log.warning("TOOL OUT %s REFUSED/FAILED %.0fms error=%s", tool, (time.perf_counter() - start) * 1000, logsetup.clean(str(e), 500))
             REJECTIONS.labels(self.server, m.group(1) if m else "ERROR").inc()
             if span_cm is not None:
                 span.record_exception(e)
@@ -81,3 +91,5 @@ class ObservabilityMiddleware(Middleware):
             TOOL_LATENCY.labels(self.server, tool).observe(time.perf_counter() - start)
             if span_cm is not None:
                 span_cm.__exit__(None, None, None)
+            for var, token in zip((logsetup.corr, logsetup.wf, logsetup.customer), tokens):
+                var.reset(token)

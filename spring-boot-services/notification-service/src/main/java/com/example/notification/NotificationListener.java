@@ -1,6 +1,7 @@
 package com.example.notification;
 
 import com.example.common.events.EventEnvelope;
+import com.example.common.events.EventLog;
 import com.example.common.events.InboxGuard;
 import com.example.notification.NotificationRecords.CustomerNotification;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 public class NotificationListener {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(NotificationListener.class);
 
     private final NotificationService service;
     private final InboxGuard inbox;
@@ -31,11 +34,17 @@ public class NotificationListener {
     @SuppressWarnings("unchecked")
     public void onMessage(String message) throws Exception {
         EventEnvelope env = mapper.readValue(message, EventEnvelope.class);
-        if (!inbox.firstTime("notification-service", env.eventId())) {
-            return; // duplicate delivery
+        try {
+            EventLog.received(log, "notification-service", env, mapper);
+            if (!inbox.firstTime("notification-service", env.eventId())) {
+                EventLog.duplicate(log, "notification-service", env);
+                return; // duplicate delivery
+            }
+            Map<String, Object> p = env.payload();
+            service.sendToCustomer(new CustomerNotification(env.workflowId(), (String) p.get("customerId"),
+                    (String) p.get("channel"), (String) p.get("template"), (Map<String, String>) p.get("params")));
+        } finally {
+            EventLog.done();
         }
-        Map<String, Object> p = env.payload();
-        service.sendToCustomer(new CustomerNotification(env.workflowId(), (String) p.get("customerId"),
-                (String) p.get("channel"), (String) p.get("template"), (Map<String, String>) p.get("params")));
     }
 }

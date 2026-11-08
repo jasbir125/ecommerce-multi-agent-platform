@@ -35,20 +35,20 @@ class Deps:
     search_breaker: CircuitBreaker = field(default_factory=CircuitBreaker)   # shared by all runs: one outage trips it for everyone
     runs: dict[str, RunContext] = field(default_factory=dict)
 
-    def ensure(self, workflow_id: str, customer_id: str, order_id: str) -> RunContext:
+    def ensure(self, workflow_id: str, customer_id: str, order_id: str, correlation_id: str | None = None) -> RunContext:
         """Create (once) the per-run helpers. The runner calls this first so the usage tracker
         can be attached to the graph config as a callback."""
         ctx = self.runs.get(workflow_id)
         if ctx is None:
             ctx = RunContext(
-                gateway=McpGateway(self.settings, customer_id, workflow_id),
+                gateway=McpGateway(self.settings, customer_id, workflow_id, correlation_id),
                 usage=UsageTracker(self.settings.run_token_budget),
                 tool_policy=ToolPolicy(order_id, self.settings.max_tool_calls_per_agent))
             self.runs[workflow_id] = ctx
         return ctx
 
     def run(self, state: WorkflowState) -> RunContext:
-        return self.ensure(state.workflow_id, state.customer_id, state.order_id)
+        return self.ensure(state.workflow_id, state.customer_id, state.order_id, state.correlation_id or None)
 
     def release(self, workflow_id: str) -> None:
         self.runs.pop(workflow_id, None)

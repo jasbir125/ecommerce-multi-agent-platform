@@ -6,6 +6,7 @@ X-Customer-Id and refuse write tools for any other workflow than X-Workflow-Id.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import Any
 
@@ -16,8 +17,12 @@ from app.config import Settings
 from app.guardrails.tool_guardrails import ToolCallError
 from app.mcp.tool_loader import parse_tool_result
 from app.observability import metrics as m
+from app.observability import logctx
 from app.observability.context import CURRENT_NODE
 from app.observability.tracing import span
+
+
+log = logging.getLogger("agent.tool")
 
 
 class McpGateway:
@@ -45,10 +50,13 @@ class McpGateway:
         if tool is None:
             raise ToolCallError(f"UNKNOWN_TOOL: {name}")
         started = time.perf_counter()
+        node = CURRENT_NODE.get() or "-"
+        log.info("TOOL > %s (by graph step %s) args=%s", name, node, logctx.clean(args))
         for attempt in range(1, self.RATE_LIMIT_ATTEMPTS + 1):
             try:
                 with span(f"tool {name}", agent="code"):
                     out = parse_tool_result(await tool.ainvoke(args))
+                log.info("TOOL < %s ok %.0fms result=%s", name, (time.perf_counter() - started) * 1000, logctx.clean(out))
                 self.call_log.append({"node": CURRENT_NODE.get(), "tool": name, "ok": True, "error": None})
                 m.TOOL_CALLS.labels("code", name, "ok").inc()
                 m.TOOL_LATENCY.labels(name).observe(time.perf_counter() - started)
@@ -59,6 +67,7 @@ class McpGateway:
                     m.RETRIES.labels("rate_limit").inc()
                     await asyncio.sleep(self.RATE_LIMIT_WAIT * attempt)
                     continue
+                log.warning("TOOL < %s FAILED %.0fms error=%s", name, (time.perf_counter() - started) * 1000, logctx.clean(str(e), 400))
                 self.call_log.append({"node": CURRENT_NODE.get(), "tool": name, "ok": False, "error": str(e)[:160]})
                 m.TOOL_CALLS.labels("code", name, "error").inc()
                 code = str(e).split(":")[0].strip()

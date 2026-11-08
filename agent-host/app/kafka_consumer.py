@@ -7,6 +7,7 @@ import logging
 
 from aiokafka import AIOKafkaConsumer
 
+from app.observability import logctx
 from app.observability.tracing import extract_context, span
 from app.runner import RunManager
 
@@ -69,10 +70,14 @@ class TriggerConsumer:
         job.add_done_callback(self._jobs.discard)
 
     async def _dispatch(self, topic: str, env: dict, trace_ctx=None) -> None:
+        wf, payload = env.get("workflowId"), env.get("payload", {})
+        tokens = logctx.bind(correlation_id=env.get("correlationId"), workflow_id=wf)
+        log.info("KAFKA IN  topic=%s type=%s eventId=%s corr=%s wf=%s cause=%s payload=%s", topic, env.get("type"), env.get("eventId"),
+                 env.get("correlationId"), wf, env.get("causationId"), logctx.clean(payload))
         try:
             if not await self._runner.claim_event(env["eventId"]):
+                log.info("KAFKA IN  topic=%s eventId=%s duplicate delivery, skipped", topic, env.get("eventId"))
                 return                                    # duplicate delivery
-            wf, payload = env.get("workflowId"), env.get("payload", {})
             if topic == "workflow.started":
                 with span("workflow.run", context=trace_ctx, workflow_id=wf, trigger=topic):       # child of the request's trace
                     await self._runner.start_from_workflow(wf, payload["customerId"])
@@ -81,4 +86,6 @@ class TriggerConsumer:
                     with span("workflow.resume", context=trace_ctx, workflow_id=wf, trigger=topic):
                         await self._runner.resume(wf)
         except Exception:  # noqa: BLE001
-            log.exception("failed to process %s event", topic)
+            log.exception("failed to process %s event eventId=%s", topic, env.get("eventId"))
+        finally:
+            logctx.unbind(tokens)

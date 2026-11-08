@@ -8,6 +8,7 @@ locals {
   common_env = {
     PLATFORM_ENV                   = var.platform_env
     PLATFORM_FAULTS_ENABLED        = "false"
+    LOG_FORMAT                     = "json" # Python services: one JSON object per line for CloudWatch (Spring ignores it)
     JAVA_TOOL_OPTIONS              = "-XX:MaxRAMPercentage=75"
     SPRING_DATASOURCE_URL          = "jdbc:postgresql://${aws_db_instance.postgres.address}:5432/ecommerce?sslmode=require"
     SPRING_DATASOURCE_USERNAME     = "ecommerce"

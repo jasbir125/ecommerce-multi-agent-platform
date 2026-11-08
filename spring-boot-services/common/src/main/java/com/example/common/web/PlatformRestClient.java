@@ -18,6 +18,8 @@ import org.springframework.web.client.RestClient;
 @Component
 public class PlatformRestClient {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger("http.client");
+
     private final PlatformProperties props;
     private final org.springframework.web.client.RestClient.Builder builder;
 
@@ -46,7 +48,17 @@ public class PlatformRestClient {
                     if (!c.roles().isEmpty()) {
                         request.getHeaders().set(CallerFilter.H_ROLES, String.join(",", c.roles()));
                     }
-                    return execution.execute(request, body);
+                    long t0 = System.nanoTime();
+                    String target = request.getMethod() + " " + request.getURI().getHost() + ":" + request.getURI().getPort() + request.getURI().getPath();
+                    try {
+                        var response = execution.execute(request, body);
+                        log.info("=> {}  {} {}ms corr={} req={}", target, response.getStatusCode().value(), (System.nanoTime() - t0) / 1_000_000,
+                                c.correlationId(), com.example.common.util.LogSanitizer.clean(new String(body, java.nio.charset.StandardCharsets.UTF_8), 800));
+                        return response;
+                    } catch (java.io.IOException e) {
+                        log.warn("=> {}  FAILED {}ms corr={} error={}", target, (System.nanoTime() - t0) / 1_000_000, c.correlationId(), e.toString());
+                        throw e;
+                    }
                 })
                 .build();
     }

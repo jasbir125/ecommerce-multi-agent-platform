@@ -94,7 +94,7 @@ class FakeApi:
             raise ApiError(503, "DOWN", f"{name} is down")
 
     def health(self): return {"auth-service": True, "workflow-service": True, "approval-service": True, "agent-host": False}
-    def create_workflow(self, who, order, msg): self._maybe_fail("create_workflow"); return {"workflowId": "WF-QUEUED0001"}
+    def create_workflow(self, who, order, msg, correlation_id=None): self._maybe_fail("create_workflow"); return {"workflowId": "WF-QUEUED0001"}
     def get_workflow(self, who, wf): self._maybe_fail("get_workflow"); return WORKFLOW
     def list_workflows(self, who, status=None): self._maybe_fail("list_workflows"); return [WORKFLOW]
     def workflow_trace(self, who, wf): self._maybe_fail("workflow_trace"); return WF_TRACE
@@ -104,12 +104,12 @@ class FakeApi:
     def list_approvals(self, who, status=None):
         self._maybe_fail("list_approvals")
         return [APPROVAL] if status == "PENDING" else []
-    def decide(self, who, aid, decision, comment=""): self._maybe_fail("decide"); self.decisions.append((aid, decision, comment)); return {}
+    def decide(self, who, aid, decision, comment="", correlation_id=None): self._maybe_fail("decide"); self.decisions.append((aid, decision, comment)); return {}
     def audit(self, who, wf): return WF_TRACE["auditEvents"]
     def ask_policy(self, who, question, **filters): self._maybe_fail("ask_policy"); self.calls.append(("ask", question, filters)); return RAG
     def admin_metrics(self, who, hours=24): self._maybe_fail("admin_metrics"); return METRICS
 
-    def stream_run(self, who, order, msg):
+    def stream_run(self, who, order, msg, correlation_id=None):
         self._maybe_fail("stream_run")
         yield {"event": "started", "workflowId": "WF-TEST000001"}
         yield {"event": "node", "node": "supervisor", "trace": TRACE[1]}

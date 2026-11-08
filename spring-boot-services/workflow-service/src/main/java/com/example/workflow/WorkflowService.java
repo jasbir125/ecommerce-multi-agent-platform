@@ -19,6 +19,8 @@ import org.springframework.web.client.RestClientResponseException;
 @Service
 public class WorkflowService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(WorkflowService.class);
+
     private static final Set<String> PRIVILEGED = Set.of("OPERATOR", "ADMIN", "AGENT");
 
     private final WorkflowRepository repo;
@@ -124,6 +126,7 @@ public class WorkflowService {
             return w; // already applied
         }
         if (!WorkflowStatus.isKnown(target) || !WorkflowStatus.canMove(w.status(), target)) {
+            log.warn("WORKFLOW {} refused move {} -> {} (key={})", w.workflowId(), w.status(), target, key);
             throw new ApiException(HttpStatus.CONFLICT, "INVALID_TRANSITION", "Cannot move from " + w.status() + " to " + target);
         }
         Map<String, Object> state = new LinkedHashMap<>(w.state());
@@ -134,6 +137,7 @@ public class WorkflowService {
         newHistory.add(entry(target, reason, key));
         state.put("history", newHistory);
 
+        log.info("WORKFLOW {} {} -> {} reason={} key={}", w.workflowId(), w.status(), target, reason, key);
         tx.executeWithoutResult(s -> {
             if (!repo.update(w.workflowId(), w.version(), target, state)) {
                 throw new ApiException(HttpStatus.CONFLICT, "CONCURRENT_UPDATE", "Workflow changed concurrently; reload and retry");

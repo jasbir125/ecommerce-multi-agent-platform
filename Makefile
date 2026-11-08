@@ -1,5 +1,5 @@
 # Convenience targets. Run `make help` for the list.
-.PHONY: tf-validate eval-golden eval-component eval-security dashboards eval-rag eval-rag-holdout help env infra up down logs ps topics psql build-java run-agent test-agent run-mcp test-mcp run-ui test-ui ui-smoke clean
+.PHONY: trace tf-validate eval-golden eval-component eval-security dashboards eval-rag eval-rag-holdout help env infra up down logs ps topics psql build-java run-agent test-agent run-mcp test-mcp run-ui test-ui ui-smoke clean
 
 help:        ## Show this help
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -83,3 +83,7 @@ dashboards: ## regenerate and validate Grafana dashboards
 
 tf-validate: ## Terraform format check + validate (no AWS credentials needed)
 	cd infra/aws/terraform && terraform fmt -check -recursive && terraform init -backend=false -input=false >/dev/null && terraform validate
+
+trace: ## follow one request through every service: make trace ID=<correlation id | WF-... id | order id> [SINCE=3h]
+	@test -n "$(ID)" || (echo "usage: make trace ID=<correlation id | workflow id>" && exit 1)
+	python3 scripts/trace_request.py "$(ID)" --since $(or $(SINCE),3h)

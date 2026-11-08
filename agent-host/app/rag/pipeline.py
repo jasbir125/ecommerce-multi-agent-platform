@@ -19,6 +19,7 @@ from app.observability.tracing import span
 from app.rag.answer_cache import AnswerCache, make_key
 from app.rag.context_builder import apply_region_precedence, build_context
 from app.rag.grounding_validator import content_stems, describe, validate
+from app.observability import logctx
 from app.rag.models import (INSUFFICIENT_ANSWER, INSTRUCTION_LIKE, Chunk, ContextPack, GroundedAnswer, GroundingReport, RagResult, RagSource,
                             Statement)
 from app.rag.query_rewriter import clean_query, merge_queries
@@ -51,6 +52,16 @@ class RagPipeline:
         self.retriever, self.llm, self.cache, self.s = retriever, llm, cache or AnswerCache(None), settings or RagSettings()
 
     async def answer(self, question: str, filters: dict[str, Any] | None = None) -> RagResult:
+        log.info("RAG > question=%s filters=%s", logctx.clean(question, 300), logctx.clean(filters or {}, 200))
+        res = await self._answer(question, filters)
+        d = res.diagnostics or {}
+        log.info("RAG < grounded=%s insufficient=%s confidence=%s cache_hit=%s queries=%s sources=%s dropped=%s timings_ms=%s answer=%s",
+                 res.grounded, res.insufficientEvidence, res.confidence, d.get("cacheHit"), d.get("queries"),
+                 [f"{x.policyKey}@v{x.version}({x.rerankScore})" for x in res.sources], (d.get("context") or {}).get("dropped"),
+                 d.get("timingsMs"), logctx.clean(res.answer, 500))
+        return res
+
+    async def _answer(self, question: str, filters: dict[str, Any] | None = None) -> RagResult:
         t0 = time.perf_counter()
         diag: dict[str, Any] = {"timingsMs": {}, "stages": []}
         filters = {k: v for k, v in (filters or {}).items() if v}

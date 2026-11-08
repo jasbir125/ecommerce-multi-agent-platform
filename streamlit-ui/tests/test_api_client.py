@@ -152,3 +152,21 @@ def test_login_errors_carry_the_service_code():
     with pytest.raises(ApiError) as e:
         client(lambda r: httpx.Response(429, json={"code": "TOO_MANY_ATTEMPTS", "detail": "slow down"})).login("alice", "x")
     assert e.value.code == "TOO_MANY_ATTEMPTS"
+
+
+def test_every_call_sends_a_correlation_id_and_logs_it(caplog):
+    import logging
+    seen = {}
+
+    def handler(request):
+        seen["corr"] = request.headers.get("x-correlation-id")
+        return httpx.Response(200, json={"workflowId": "WF-1", "accessToken": "should-not-be-logged"})
+
+    api = ApiClient(Config(), transport=httpx.MockTransport(handler))
+    who = Identity("customer", "CUST-1001", "alice", token="t")
+    with caplog.at_level(logging.INFO, logger="ui.api"):
+        api.create_workflow(who, "ORD-1", "late", correlation_id="my-corr-id")
+    assert seen["corr"] == "my-corr-id"
+    lines = [r.getMessage() for r in caplog.records if r.name == "ui.api"]
+    assert lines[0].startswith("-> POST") and "corr=my-corr-id" in lines[0] and "ORD-1" in lines[0]
+    assert "<- POST" in lines[1] and " 200 " in lines[1] and "should-not-be-logged" not in lines[1]

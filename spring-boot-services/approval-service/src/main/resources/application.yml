@@ -58,7 +58,7 @@ management:
 
 logging:
   pattern:
-    level: "%5p [${spring.application.name},%X{traceId:-},%X{correlationId:-}]"
+    level: "%5p [${spring.application.name},trace=%X{traceId:-},corr=%X{correlationId:-},wf=%X{workflowId:-}]"
 
 approval:
   ttl-minutes: ${APPROVAL_TTL_MINUTES:30}

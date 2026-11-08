@@ -292,7 +292,7 @@ Each rule is mapped to its implementation and test in `docs/guardrails.md`.
 - **Metrics (Prometheus):** counts and timings (runs, failures, tokens, cost, refunds, approvals).
 - **Dashboards (Grafana):** four pre-built dashboards.
 - **Alerts:** 18 rules, e.g. high failure rate or Kafka messages piling up.
-- **Logs and audit trail:** what happened and who did it.
+- **Logs and audit trail:** what happened and who did it. Every log line carries a *correlation id* (one per customer request) and the workflow id, so `make trace ID=<id>` prints the whole journey of a request through every service and agent (see `docs/logging.md`).
 - The trace id is passed along through web calls, MCP calls and even Kafka messages, which is why one trace connects everything.
 
 ---

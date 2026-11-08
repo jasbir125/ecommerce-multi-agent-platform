@@ -59,7 +59,7 @@ management:
 
 logging:
   pattern:
-    level: "%5p [${spring.application.name},%X{traceId:-},%X{correlationId:-}]"
+    level: "%5p [${spring.application.name},trace=%X{traceId:-},corr=%X{correlationId:-},wf=%X{workflowId:-}]"
 
 services:
   inventory-url: ${INVENTORY_SERVICE_URL:http://localhost:8084}

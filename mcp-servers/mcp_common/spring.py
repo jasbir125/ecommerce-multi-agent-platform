@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 import httpx
 from fastmcp.exceptions import ToolError
 
+from . import logsetup
 from .security import current_identity
 
 log = logging.getLogger("mcp.spring")
@@ -32,6 +34,8 @@ class SpringClient:
             h["X-Customer-Id"] = ident.customer_id
         if ident.correlation_id:
             h["X-Correlation-Id"] = ident.correlation_id
+        if ident.workflow_id:
+            h["X-Workflow-Id"] = ident.workflow_id
         if ident.roles:
             h["X-Roles"] = ",".join(sorted(ident.roles))
         return h
@@ -40,7 +44,9 @@ class SpringClient:
         last: Exception | None = None
         for attempt in range(3):
             try:
+                t0 = time.perf_counter()
                 r = await self._client.get(path, params=params, headers=self._headers())
+                self._log("GET", path, params, r, t0)
                 if r.status_code >= 500 and attempt < 2:
                     await asyncio.sleep(0.2 * 2 ** attempt)
                     continue
@@ -54,12 +60,20 @@ class SpringClient:
 
     async def post(self, path: str, json: dict[str, Any] | None = None) -> Any:
         try:
+            t0 = time.perf_counter()
             r = await self._client.post(path, json=json or {}, headers=self._headers())
+            self._log("POST", path, json, r, t0)
         except (httpx.ConnectError, httpx.TimeoutException) as e:
             log.warning("POST %s failed: %s", path, e)
             raise ToolError("UPSTREAM_UNAVAILABLE: the action may not have completed. Do not claim success; "
                             "verify with a read tool or escalate to support.") from e
         return self._unwrap(r)
+
+    @staticmethod
+    def _log(method: str, path: str, sent: Any, r: httpx.Response, t0: float) -> None:
+        (log.warning if r.status_code >= 400 else log.info)(
+            "=> %s %s %s %.0fms sent=%s resp=%s", method, path, r.status_code, (time.perf_counter() - t0) * 1000,
+            logsetup.clean(sent, 600), logsetup.clean(r.text, 800))
 
     @staticmethod
     def _unwrap(r: httpx.Response) -> Any:

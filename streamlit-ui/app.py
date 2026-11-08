@@ -1,4 +1,5 @@
 """Order Recovery Platform: internal demo and operations UI."""
+import logging
 import time
 
 import streamlit as st
@@ -8,6 +9,13 @@ from config import Config
 from components import admin_panel, approval_panel, chat, policy_assistant, workflow_view
 from data import icon
 from state import get_api, open_workflow, selected_workflow
+
+if not logging.getLogger("ui").handlers:                  # one handler for all the UI's loggers, set up once per process
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter("%(asctime)s.%(msecs)03d %(levelname)-5s [streamlit-ui] %(name)s: %(message)s", "%Y-%m-%d %H:%M:%S"))
+    logging.getLogger("ui").addHandler(_h)
+    logging.getLogger("ui").setLevel(logging.INFO)
+    logging.getLogger("ui").propagate = False
 
 st.set_page_config(page_title="Order Recovery Platform", page_icon="📦", layout="wide")
 

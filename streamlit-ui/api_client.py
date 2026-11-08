@@ -7,12 +7,32 @@ themselves, so a customer persona cannot read another customer's workflow even i
 from __future__ import annotations
 
 import json
+import logging
+import re
+import time
+import uuid
 from dataclasses import dataclass
 from typing import Any, Iterator
 
 import httpx
 
 from config import Config
+
+log = logging.getLogger("ui.api")
+_SECRET = re.compile(r'("(?:password|token|accessToken|authorization|secret)"\s*:\s*)"[^"]*"', re.I)
+
+
+def new_correlation_id() -> str:
+    """One id per user action. It travels in X-Correlation-Id through every service, agent and Kafka event."""
+    return str(uuid.uuid4())
+
+
+def _safe(text: str | bytes | None, limit: int = 800) -> str:
+    if not text:
+        return "-"
+    t = text.decode("utf-8", "replace") if isinstance(text, bytes) else text
+    t = _SECRET.sub(r'\1"***"', t).replace("\n", " ")
+    return t if len(t) <= limit else t[:limit] + f"...(+{len(t) - limit} chars)"
 
 
 @dataclass(frozen=True)
@@ -67,21 +87,28 @@ class ApiClient:
         self._http = httpx.Client(timeout=httpx.Timeout(30.0, connect=3.0), transport=transport)
 
     # ------------------------------------------------------------- plumbing
-    def _headers(self, who: Identity) -> dict[str, str]:
+    def _headers(self, who: Identity, corr: str | None = None) -> dict[str, str]:
+        corr_h = {"X-Correlation-Id": corr or new_correlation_id()}
         if who.token:                                  # login mode: identity comes from the signed token, nothing else is sent
-            return {"Authorization": f"Bearer {who.token}", "Content-Type": "application/json"}
-        h = {"X-Service-Token": self.cfg.service_token, "Content-Type": "application/json"}
+            return {"Authorization": f"Bearer {who.token}", "Content-Type": "application/json", **corr_h}
+        h = {"X-Service-Token": self.cfg.service_token, "Content-Type": "application/json", **corr_h}
         if who.customer_id:
             h["X-Customer-Id"] = who.customer_id
         if who.roles:
             h["X-Roles"] = who.roles
         return h
 
-    def _call(self, method: str, base: str, path: str, who: Identity, *, ok_404: bool = False, **kw) -> Any:
+    def _call(self, method: str, base: str, path: str, who: Identity, *, ok_404: bool = False, corr: str | None = None, **kw) -> Any:
+        headers = self._headers(who, corr)
+        cid, t0 = headers["X-Correlation-Id"], time.perf_counter()
+        log.info("-> %s %s%s user=%s corr=%s body=%s", method, base, path, who.name, cid, _safe(json.dumps(kw["json"]) if "json" in kw else None))
         try:
-            r = self._http.request(method, f"{base}{path}", headers=self._headers(who), **kw)
+            r = self._http.request(method, f"{base}{path}", headers=headers, **kw)
         except httpx.TransportError as e:
+            log.warning("<- %s %s%s UNREACHABLE %s corr=%s", method, base, path, e.__class__.__name__, cid)
             raise ApiError(0, "UNREACHABLE", f"Cannot reach {base}: {e.__class__.__name__}") from e
+        (log.warning if r.status_code >= 400 else log.info)("<- %s %s%s %s %.0fms corr=%s resp=%s", method, base, path, r.status_code,
+                                                           (time.perf_counter() - t0) * 1000, cid, _safe(r.content))
         if r.status_code == 404 and ok_404:
             return None
         if r.status_code == 401 and who.token:
@@ -102,8 +129,8 @@ class ApiClient:
         return r.json()
 
     # ------------------------------------------------------------ workflows
-    def create_workflow(self, who: Identity, order_id: str, message: str) -> dict:
-        return self._call("POST", self.cfg.workflow_url, "/api/workflows", who, json={"orderId": order_id, "message": message})
+    def create_workflow(self, who: Identity, order_id: str, message: str, correlation_id: str | None = None) -> dict:
+        return self._call("POST", self.cfg.workflow_url, "/api/workflows", who, corr=correlation_id, json={"orderId": order_id, "message": message})
 
     def get_workflow(self, who: Identity, workflow_id: str) -> dict:
         return self._call("GET", self.cfg.workflow_url, f"/api/workflows/{workflow_id}", who)
@@ -126,12 +153,15 @@ class ApiClient:
     def run_trace(self, who: Identity, workflow_id: str) -> dict | None:
         return self._call("GET", self.cfg.agent_url, f"/api/agent/runs/{workflow_id}/trace", who, ok_404=True)
 
-    def stream_run(self, who: Identity, order_id: str, message: str) -> Iterator[dict]:
+    def stream_run(self, who: Identity, order_id: str, message: str, correlation_id: str | None = None) -> Iterator[dict]:
         """Starts a run and yields its progress events (server-sent events) as they happen."""
         body = {"customerId": who.customer_id, "orderId": order_id, "message": message}
+        headers = self._headers(who, correlation_id)
+        log.info("-> POST %s/api/agent/runs?stream=true user=%s corr=%s body=%s", self.cfg.agent_url, who.name, headers["X-Correlation-Id"], _safe(json.dumps(body)))
         try:
             with self._http.stream("POST", f"{self.cfg.agent_url}/api/agent/runs", params={"stream": "true"},
-                                   headers=self._headers(who), json=body, timeout=httpx.Timeout(300.0, connect=3.0)) as r:
+                                   headers=headers, json=body, timeout=httpx.Timeout(300.0, connect=3.0)) as r:
+                log.info("<- stream opened status=%s corr=%s", r.status_code, headers["X-Correlation-Id"])
                 if r.status_code == 401 and who.token:
                     raise SessionExpired("Your session has expired. Please sign in again.")
                 if r.status_code >= 400:
@@ -147,8 +177,8 @@ class ApiClient:
     def list_approvals(self, who: Identity, status: str | None = None) -> list[dict]:
         return self._call("GET", self.cfg.approval_url, "/api/approvals", who, params={"status": status} if status else None)
 
-    def decide(self, who: Identity, approval_id: str, decision: str, comment: str = "") -> dict:
-        return self._call("POST", self.cfg.approval_url, f"/api/approvals/{approval_id}/decision", who,
+    def decide(self, who: Identity, approval_id: str, decision: str, comment: str = "", correlation_id: str | None = None) -> dict:
+        return self._call("POST", self.cfg.approval_url, f"/api/approvals/{approval_id}/decision", who, corr=correlation_id,
                           json={"decision": decision, "decidedBy": who.name, "comment": comment or None})
 
     # ----------------------------------------------------------------- audit

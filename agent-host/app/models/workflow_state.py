@@ -18,6 +18,7 @@ Status = Literal["STARTED", "INVESTIGATING", "WAITING_FOR_APPROVAL", "READY_FOR_
 class WorkflowState(BaseModel):
     workflow_id: str
     request_id: str = ""
+    correlation_id: str = ""            # id of the customer request that started this case; kept for every later step
     customer_id: str
     order_id: str
     customer_message: str

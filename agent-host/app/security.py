@@ -13,9 +13,11 @@ from typing import NamedTuple
 
 import jwt
 from fastapi import HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from jwt import PyJWKClient
 
 from app.config import Settings
+from app.observability import logctx
 
 log = logging.getLogger("agent.security")
 DEMO_TOKEN = "local-demo-token"
@@ -58,7 +60,7 @@ def check_startup(settings: Settings) -> None:
         log.warning("SECURITY: running with the demo/weak service token (platform_env=%s). Never deploy like this.", settings.platform_env)
 
 
-def authenticate(request: Request) -> Principal:
+async def authenticate(request: Request) -> Principal:
     """FastAPI dependency: returns who is calling, or raises 401."""
     settings: Settings = request.app.state.settings
     auth = request.headers.get("authorization", "")
@@ -67,12 +69,16 @@ def authenticate(request: Request) -> Principal:
         if verifier is None:
             raise HTTPException(401, {"code": "INVALID_TOKEN", "message": "bearer tokens are not accepted by this deployment"})
         try:
-            return verifier.verify(auth[7:].strip())
+            who = await run_in_threadpool(verifier.verify, auth[7:].strip())   # may fetch the key set over the network
+            logctx.bind(customer_id=who.customer or who.subject)
+            return who
         except Exception as e:  # noqa: BLE001 - expired, forged, wrong audience, unknown key...
             log.warning("rejected bearer token: %s", e)
             raise HTTPException(401, {"code": "INVALID_TOKEN", "message": "invalid or expired token"}, headers={"WWW-Authenticate": "Bearer"})
     presented = request.headers.get("x-service-token")
     if presented and hmac.compare_digest(presented.encode(), settings.mcp_service_token.encode()):
         roles = frozenset(r.strip().upper() for r in request.headers.get("x-roles", "").split(",") if r.strip())
-        return Principal(request.headers.get("x-customer-id") or None, roles, False)
+        who = Principal(request.headers.get("x-customer-id") or None, roles, False)
+        logctx.bind(customer_id=who.customer or "service")
+        return who
     raise HTTPException(401, {"code": "AUTHENTICATION_REQUIRED", "message": "missing or invalid credentials"}, headers={"WWW-Authenticate": "Bearer"})

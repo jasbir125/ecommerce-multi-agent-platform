@@ -48,7 +48,10 @@ public class OutboxRelay {
                 if (row.get("trace_context") != null) {
                     record.headers().add("traceparent", ((String) row.get("trace_context")).getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 }
-                kafka.send(record).get(5, TimeUnit.SECONDS);
+                var sent = kafka.send(record).get(5, TimeUnit.SECONDS);
+                log.info("KAFKA OUT topic={} partition={} offset={} key={} payload={}", row.get("topic"),
+                        sent.getRecordMetadata().partition(), sent.getRecordMetadata().offset(), row.get("event_key"),
+                        com.example.common.util.LogSanitizer.clean((String) row.get("payload"), 1500));
                 jdbc.sql("UPDATE outbox_event SET sent_at = now() WHERE id = ?").param(row.get("id")).update();
             } catch (Exception e) {
                 // Leave the row unsent; it is retried on the next poll.

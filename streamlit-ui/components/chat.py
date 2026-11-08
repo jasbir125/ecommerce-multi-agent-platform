@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from api_client import ApiError, Identity
+from api_client import ApiError, Identity, new_correlation_id
 from components import workflow_view
 from data import icon, label
 from state import open_workflow, selected_workflow
@@ -42,6 +42,12 @@ def render(api, who: Identity) -> None:
             except ApiError as e:
                 st.error(f"Request failed: {e}")
 
+    track = st.session_state.get("last_tracking")
+    if track:
+        st.caption(f"Tracking id for support / debugging: correlation `{track['correlationId']}`"
+                   + (f" · workflow `{track['workflowId']}`" if track.get("workflowId") else "")
+                   + ". Search the logs of any service for either id (see docs/logging.md).")
+
     wf = selected_workflow()
     if wf:
         st.divider()
@@ -50,16 +56,20 @@ def render(api, who: Identity) -> None:
 
 
 def _submit(api, who: Identity, order: str, message: str, live: bool) -> None:
+    corr = new_correlation_id()                       # tracking id for everything this click causes, in every service's logs
+    st.session_state["last_tracking"] = {"correlationId": corr}
     if not live:
-        wf = api.create_workflow(who, order, message)
+        wf = api.create_workflow(who, order, message, correlation_id=corr)
+        st.session_state["last_tracking"]["workflowId"] = wf["workflowId"]
         open_workflow(wf["workflowId"])
         st.session_state.pop("chat-status", None)
         st.toast(f"Created {wf['workflowId']}")
         return
     with st.status("Agents are working…", expanded=True) as box:
-        for ev in api.stream_run(who, order, message):
+        for ev in api.stream_run(who, order, message, correlation_id=corr):
             kind = ev.get("event")
             if kind == "started":
+                st.session_state["last_tracking"]["workflowId"] = ev["workflowId"]
                 open_workflow(ev["workflowId"])
                 st.session_state.pop("chat-status", None)
                 st.write(f"🚀 Workflow `{ev['workflowId']}` created")

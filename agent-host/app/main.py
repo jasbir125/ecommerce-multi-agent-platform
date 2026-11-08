@@ -14,13 +14,15 @@ from app.graph.deps import Deps
 from app.graph.supervisor_graph import build_graph
 from app.kafka_consumer import TriggerConsumer
 from app.llm import ModelFactory
+from app.observability.http_log import RequestLogMiddleware
+from app.observability.logctx import setup_logging
 from app.observability.tracing import instrument_app, setup_tracing
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from app.runner import RunManager
 from app.security import JwtVerifier, check_startup
 from app.services.workflow_client import WorkflowClient
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+setup_logging("agent-host")
 log = logging.getLogger("agent.main")
 
 
@@ -99,6 +101,9 @@ async def harden(request: Request, call_next):
     response.headers.update({"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Cache-Control": "no-store",
                              "Referrer-Policy": "no-referrer"})
     return response
+
+
+app.add_middleware(RequestLogMiddleware, service="agent-host")      # added last = outermost: logs every call, even refused ones
 
 
 @app.get("/metrics", include_in_schema=False)

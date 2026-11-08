@@ -2,7 +2,7 @@
 import logging
 
 from fastmcp import FastMCP
-from mcp_common import observability
+from mcp_common import logsetup, observability
 from mcp_common.security import TokenAuthMiddleware
 from starlette.middleware import Middleware
 from starlette.responses import JSONResponse
@@ -39,6 +39,7 @@ def create_server(settings: Settings | None = None, deps: Deps | None = None) ->
 
 if __name__ == "__main__":
     s = get_settings()
+    logsetup.setup_logging("policy-mcp-server")
     observability.setup("policy-mcp-server")
     create_server(s).run(
         transport="http", host="0.0.0.0", port=s.policy_mcp_port, path="/mcp",

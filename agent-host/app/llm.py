@@ -11,7 +11,7 @@ from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel
 
 from app.config import Settings
-from app.observability import metrics as m
+from app.observability import logctx, metrics as m
 from app.observability.tracing import end_span, start_span
 
 log = logging.getLogger("agent.llm")
@@ -66,6 +66,44 @@ def build_model(settings: Settings, provider: str, name: str) -> BaseChatModel:
     return ChatAnthropic(model=name, temperature=0, api_key=settings.anthropic_api_key, max_retries=2, timeout=60)
 
 
+def _text_of(content: Any) -> str:
+    if isinstance(content, list):
+        return " ".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
+    return str(content or "")
+
+
+def _describe_prompt(messages: list) -> str:
+    """Prompt summary for the log: how many messages, and (if LOG_LLM_CONTENT) the system line and the latest input."""
+    try:
+        flat = [m_ for batch in messages for m_ in batch]
+        size = sum(len(_text_of(getattr(m_, "content", ""))) for m_ in flat)
+        head = f"messages={len(flat)} chars={size}"
+        if not logctx.llm_content_enabled() or not flat:
+            return head
+        system = next((m_ for m_ in flat if getattr(m_, "type", "") == "system"), None)
+        last = flat[-1]
+        parts = [head]
+        if system is not None:
+            parts.append(f"system={logctx.clean(_text_of(getattr(system, 'content', '')), 200)}")
+        parts.append(f"last[{getattr(last, 'type', '?')}]={logctx.clean(_text_of(getattr(last, 'content', '')))}")
+        return " ".join(parts)
+    except Exception:  # noqa: BLE001 - logging must not break a model call
+        return "messages=<unavailable>"
+
+
+def _describe_answer(response) -> str:
+    """Never raises: logging must not be able to break a model call."""
+    try:
+        msg = response.generations[0][0].message
+        content = getattr(msg, "content", "")
+        calls = [f"{c.get('name')}({logctx.clean(c.get('args'), 300)})" for c in (getattr(msg, "tool_calls", None) or [])]
+        if not logctx.llm_content_enabled():
+            return f"chars={len(_text_of(content))} tool_calls={[c.split('(')[0] for c in calls]}"
+        return f"tool_calls={calls} answer={logctx.clean(_text_of(content))}"
+    except Exception:  # noqa: BLE001
+        return "answer=<unavailable>"
+
+
 class UsageTracker(AsyncCallbackHandler):
     """Counts tokens and estimated cost per agent for one run, and enforces the token budget."""
 
@@ -89,6 +127,7 @@ class UsageTracker(AsyncCallbackHandler):
     async def on_chat_model_start(self, serialized, messages, *, run_id, metadata=None, **kwargs):
         meta = metadata or {}
         agent, model = meta.get("agent", "unknown"), meta.get("ls_model_name", "")
+        log.info("LLM > %s model=%s %s", agent, model, _describe_prompt(messages))
         self._agent_of_run[run_id] = (agent, model, time.perf_counter(), start_span("llm.call", agent=agent, model=model))
 
     async def on_llm_end(self, response, *, run_id, **kwargs):
@@ -99,6 +138,7 @@ class UsageTracker(AsyncCallbackHandler):
         except (AttributeError, IndexError):
             pass
         i, o = usage.get("input_tokens", 0), usage.get("output_tokens", 0)
+        log.info("LLM < %s model=%s %.0fms tokens in=%s out=%s %s", agent, model, (time.perf_counter() - started) * 1000, i, o, _describe_answer(response))
         price = next((p for k, p in PRICES.items() if k in model), (0, 0))
         row = self.by_agent[agent]
         row["input"] += i

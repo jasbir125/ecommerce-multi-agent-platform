@@ -2,23 +2,42 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 import httpx
 
 from app.config import Settings
+from app.observability import logctx
 
 log = logging.getLogger("agent.workflow")
+
+
+async def _log_request(request: httpx.Request) -> None:
+    request.extensions["t0"] = time.perf_counter()
+
+
+async def _log_response(response: httpx.Response) -> None:
+    req = response.request
+    await response.aread()
+    ms = (time.perf_counter() - req.extensions.get("t0", time.perf_counter())) * 1000
+    (log.warning if response.status_code >= 400 else log.info)(
+        "=> %s %s %s %.0fms req=%s resp=%s", req.method, req.url.path, response.status_code, ms, logctx.clean(req.content), logctx.clean(response.content, 600))
 
 
 class WorkflowClient:
     def __init__(self, settings: Settings, transport: httpx.AsyncBaseTransport | None = None):
         self._s = settings
-        self._http = httpx.AsyncClient(base_url=settings.workflow_service_url, timeout=10, transport=transport)
-        self._audit = httpx.AsyncClient(base_url=settings.audit_service_url, timeout=5, transport=transport)
+        hooks = {"request": [_log_request], "response": [_log_response]}
+        self._http = httpx.AsyncClient(base_url=settings.workflow_service_url, timeout=10, transport=transport, event_hooks=hooks)
+        self._audit = httpx.AsyncClient(base_url=settings.audit_service_url, timeout=5, transport=transport, event_hooks=hooks)
 
     def _headers(self, customer_id: str | None, roles: str = "AGENT") -> dict[str, str]:
         h = {"X-Service-Token": self._s.mcp_service_token, "X-Roles": roles}
+        if logctx.correlation_id.get():
+            h["X-Correlation-Id"] = logctx.correlation_id.get()
+        if logctx.workflow_id.get():
+            h["X-Workflow-Id"] = logctx.workflow_id.get()
         if customer_id:
             h["X-Customer-Id"] = customer_id
         return h

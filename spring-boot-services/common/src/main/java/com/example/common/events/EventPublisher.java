@@ -21,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnProperty(name = "platform.messaging.enabled", havingValue = "true", matchIfMissing = true)
 public class EventPublisher {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(EventPublisher.class);
+
     private final JdbcClient jdbc;
     private final ObjectMapper mapper;
     private final io.micrometer.tracing.Tracer tracer;
@@ -43,6 +45,8 @@ public class EventPublisher {
         String correlation = CallerHolder.current().correlationId();
         EventEnvelope env = new EventEnvelope(eventId, type, workflowId,
                 correlation != null ? correlation : workflowId, causationId, Instant.now(), payload);
+        log.info("EVENT queued topic={} type={} eventId={} corr={} wf={} cause={} payload={}", topic, type, eventId, env.correlationId(),
+                workflowId, causationId, com.example.common.util.LogSanitizer.clean(String.valueOf(payload), 1500));
         try {
             jdbc.sql("INSERT INTO outbox_event (event_id, topic, event_key, payload, trace_context) VALUES (?, ?, ?, ?, ?)")
                     .params(eventId, topic, key, mapper.writeValueAsString(env), traceparent()).update();

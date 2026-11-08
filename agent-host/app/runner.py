@@ -9,6 +9,7 @@ import httpx
 from langgraph.types import Command
 
 from app.config import Settings
+from app.observability import logctx
 from app.graph.deps import Deps
 from app.guardrails.input_guardrails import RunRateLimiter
 from app.models.workflow_state import WorkflowState
@@ -74,8 +75,8 @@ class RunManager:
         return await self._acquire(f"event:{event_id}", ttl=3600)
 
     # ------------------------------------------------------------------- config
-    def _config(self, workflow_id: str, customer_id: str, order_id: str) -> dict:
-        ctx = self.deps.ensure(workflow_id, customer_id, order_id)
+    def _config(self, workflow_id: str, customer_id: str, order_id: str, correlation_id: str | None = None) -> dict:
+        ctx = self.deps.ensure(workflow_id, customer_id, order_id, correlation_id)
         return {"configurable": {"thread_id": workflow_id, "deps": self.deps}, "callbacks": [ctx.usage], "recursion_limit": 60}
 
     async def snapshot(self, workflow_id: str):
@@ -101,10 +102,13 @@ class RunManager:
         try:
             if (await self.snapshot(workflow_id)).values:
                 raise RunError(409, "ALREADY_STARTED", f"Workflow {workflow_id} already has a run")
+            corr = logctx.correlation_id.get() or workflow_id
             state = WorkflowState(workflow_id=workflow_id, request_id=request_id or "", customer_id=customer_id,
-                                  order_id=order_id, customer_message=message)
+                                  order_id=order_id, customer_message=message, correlation_id=corr)
+            logctx.bind(workflow_id=workflow_id, customer_id=customer_id)
+            log.info("RUN start wf=%s customer=%s order=%s corr=%s message=%s", workflow_id, customer_id, order_id, corr, logctx.clean(message, 300))
             yield {"event": "started", "workflowId": workflow_id}
-            async for ev in self._drive(state, self._config(workflow_id, customer_id, order_id)):
+            async for ev in self._drive(state, self._config(workflow_id, customer_id, order_id, corr)):
                 yield ev
         finally:
             await self._release(f"run:{workflow_id}")
@@ -145,7 +149,12 @@ class RunManager:
             if workflow_id in self._paused:
                 self._paused.discard(workflow_id)
                 m.WORKFLOWS_WAITING.dec()
-            cfg = self._config(workflow_id, v["customer_id"], v["order_id"])
+            origin = v.get("correlation_id") or workflow_id
+            trigger = logctx.correlation_id.get()
+            logctx.bind(correlation_id=origin, workflow_id=workflow_id, customer_id=v["customer_id"])   # the case keeps the id of the original request
+            log.info("RUN resume wf=%s customer=%s order=%s status=%s origin_corr=%s trigger_corr=%s", workflow_id, v["customer_id"], v["order_id"],
+                     v.get("status"), origin, trigger)
+            cfg = self._config(workflow_id, v["customer_id"], v["order_id"], origin)
             async for ev in self._drive(Command(resume="decided"), cfg):
                 yield ev
         finally:
@@ -170,6 +179,9 @@ class RunManager:
                 yield {"event": "node", "node": node, "trace": entry}
         snap = await self.snapshot(wf)
         run = summarize(snap.values, snap.next)
+        log.info("RUN %s wf=%s status=%s intent=%s approval=%s errors=%s tokens=%s cost_usd=%s response=%s",
+                 "paused" if snap.next else "finished", wf, run.get("status"), run.get("intent"), run.get("approvalId"), run.get("errors"),
+                 (run.get("usage") or {}).get("total_tokens"), (run.get("usage") or {}).get("cost_usd"), logctx.clean(run.get("customerResponse"), 400))
         if run["waitingForApproval"] and wf not in self._paused:
             self._paused.add(wf)
             m.WORKFLOWS_WAITING.inc()

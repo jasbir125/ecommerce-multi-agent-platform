@@ -57,7 +57,10 @@ public class CallerFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
-        String correlationId = req.getHeader(H_CORRELATION);
+        String correlationId = (String) req.getAttribute(RequestLogFilter.ATTR_CORRELATION);
+        if (correlationId == null) {
+            correlationId = req.getHeader(H_CORRELATION);
+        }
         if (correlationId == null || correlationId.isBlank() || correlationId.length() > 100) {
             correlationId = UUID.randomUUID().toString();
         }
@@ -82,6 +85,7 @@ public class CallerFilter extends OncePerRequestFilter {
             return;
         }
         CallerHolder.set(caller);
+        req.setAttribute(RequestLogFilter.ATTR_CALLER, caller);
         MDC.put("correlationId", correlationId);
         res.setHeader(H_CORRELATION, correlationId);
         try {

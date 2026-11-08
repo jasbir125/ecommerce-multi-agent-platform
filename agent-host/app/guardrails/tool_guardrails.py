@@ -1,6 +1,7 @@
 """Layer 3: control which tools an agent may call and with which arguments."""
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -9,8 +10,10 @@ import time
 
 from langchain_core.tools import BaseTool, StructuredTool
 
-from app.observability import metrics as m
+from app.observability import logctx, metrics as m
 from app.observability.tracing import span
+
+tlog = logging.getLogger("agent.tool")
 
 # LLM agents get READ-ONLY tools only. Write tools are called by deterministic graph nodes.
 AGENT_TOOLS: dict[str, set[str]] = {
@@ -61,7 +64,9 @@ def guard_tools(tools: dict[str, BaseTool], agent: str, policy: ToolPolicy, log:
         def make(base: BaseTool, name: str):
             async def run(**kwargs: Any) -> str:
                 problem = policy.check(agent, name, kwargs)
+                tlog.info("TOOL > %s (called by the %s agent) args=%s", name, agent, logctx.clean(kwargs))
                 if problem:
+                    tlog.warning("TOOL < %s BLOCKED by guardrail: %s", name, problem)
                     log.append({"agent": agent, "tool": name, "args": kwargs, "ok": False, "error": problem})
                     m.guardrail("tool", problem.split(":")[0])
                     m.TOOL_CALLS.labels(agent, name, "blocked").inc()
@@ -70,10 +75,12 @@ def guard_tools(tools: dict[str, BaseTool], agent: str, policy: ToolPolicy, log:
                 try:
                     with span(f"tool {name}", agent=agent):
                         result = await base.ainvoke(kwargs)
+                    tlog.info("TOOL < %s ok %.0fms result=%s", name, (time.perf_counter() - started) * 1000, logctx.clean(result))
                     log.append({"agent": agent, "tool": name, "args": kwargs, "ok": True, "result": result})
                     m.TOOL_CALLS.labels(agent, name, "ok").inc()
                     return _as_text(result)
                 except Exception as e:  # noqa: BLE001 - agent should see the failure, not crash
+                    tlog.warning("TOOL < %s FAILED %.0fms error=%s", name, (time.perf_counter() - started) * 1000, logctx.clean(str(e), 400))
                     log.append({"agent": agent, "tool": name, "args": kwargs, "ok": False, "error": str(e)})
                     m.TOOL_CALLS.labels(agent, name, "error").inc()
                     return f"ERROR {e}"
