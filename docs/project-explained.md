@@ -131,7 +131,7 @@ A Python web page where customers submit requests, managers approve, and operato
 | `config.py` | Reads settings (service addresses, login mode) |
 | `state.py` | Remembers what the user is doing between clicks |
 | `data.py` | Small helpers that reshape backend data for display |
-| `components/chat.py` | The request box and the live "agents are working" feed |
+| `components/chat.py` | The request box and the live "agents are working" feed; shows the tracking id after you submit |
 | `components/workflow_view.py` | Shows one case: status, timeline, trace |
 | `components/workflow_timeline.py` | Bar chart of which agent ran when (overlapping bars = parallel) |
 | `components/trace_viewer.py` | Step-by-step list of agent actions and tool calls |
@@ -167,6 +167,7 @@ Each is a small program with one job. They share a toolbox called `common`.
 | `security/CallerFilter`, `Caller`, `CallerHolder` | Works out *who is calling* (a logged-in customer, or a trusted internal service) and gives helpers like "internal only" |
 | `security/JwtVerifier` | Checks the login pass is genuine and not expired |
 | `security/HardeningFilter` | Rejects oversized or malformed requests |
+| `security/RequestLogFilter`, `util/LogSanitizer`, `events/EventLog` | Writes the in/out log line for every call and Kafka message, with the tracking id and masked, shortened bodies |
 | `security/StartupSecurityCheck` | In production mode, refuses to start with weak or demo secrets |
 | `security/FaultInjector` | Test-only switch that makes one operation fail on purpose (off by default, refused in production) |
 | `events/EventPublisher`, `OutboxRelay` | The *outbox pattern*: events are saved in the database in the same step as the business change, then sent to Kafka. No lost messages. |
@@ -184,7 +185,7 @@ Each is a small program with one job. They share a toolbox called `common`.
 |---|---|
 | `ecommerce-mcp-server/` (8090) | Menu for orders, shipments, payments, stock, approvals. `tools/read_tools.py` = look-ups; `tools/write_tools.py` = the few actions (create approval request, carrier case, refund...) with guards. `clients/spring_clients.py` calls the Java services. `resources/` and `prompts/` offer read-only info and prompt templates. `security.py` checks the caller token. |
 | `policy-mcp-server/` (8091) | Menu for searching and validating policies (`tools/policy_tools.py`). |
-| `mcp_common/` | Shared helpers: `guardrails.py` (refund limits etc.), `untrusted.py` (marks retrieved text as "data, not instructions"), `audit.py`, `observability.py`, `security.py`, `spring.py`. |
+| `mcp_common/` | Shared helpers: `guardrails.py` (refund limits etc.), `untrusted.py` (marks retrieved text as "data, not instructions"), `audit.py`, `observability.py`, `logsetup.py` (readable, correlated logs), `security.py`, `spring.py`. |
 
 Why this matters: the AI can *never* reach a database or a payment API directly. It can only press buttons on this menu, and each button checks identity and rules.
 
@@ -210,11 +211,11 @@ Why this matters: the AI can *never* reach a database or a payment API directly.
 | `llm.py` | Picks the AI model per agent (OpenAI, Claude or Amazon Bedrock), falls back to another provider if one fails, counts tokens and cost, enforces a token budget |
 | `guardrails/` | Safety checks (see section 7) |
 | `rag/` | The policy question-answering pipeline (see section 6) |
-| `observability/` | Metrics, tracing, request context |
+| `observability/` | Metrics, tracing, and the logging pieces: `logctx.py` (tracking ids on every line, masking), `http_log.py` (logs every web call) |
 | `services/workflow_client.py` | Writes status and audit entries back to workflow-service |
 | `evaluation/evaluator.py` | Scores runs for the admin screen |
 | `scripts/e2e_demo.py` | A command-line demo of a whole run |
-| `tests/` | 156 automatic tests |
+| `tests/` | 162 automatic tests |
 
 ### 5.5 Infrastructure: `infra/` and `docker-compose.yml`
 
@@ -239,6 +240,7 @@ Why this matters: the AI can *never* reach a database or a payment API directly.
 | `evaluation/rag/` | Quality tests for policy search and answers |
 | `evaluation/security/run_security_checks.py` | 81 live security checks (can another customer see my order? does a fake token work?) |
 | `postman/` | A collection of 76 ready-made API requests for every service, with a runner script |
+| `scripts/trace_request.py` | The search tool behind `make trace`: follows one request through every service's logs |
 | `docs/` | Written explanations (architecture, security, guardrails, RAG, observability, evaluation, API contracts, demo script) |
 
 ---
@@ -292,8 +294,81 @@ Each rule is mapped to its implementation and test in `docs/guardrails.md`.
 - **Metrics (Prometheus):** counts and timings (runs, failures, tokens, cost, refunds, approvals).
 - **Dashboards (Grafana):** four pre-built dashboards.
 - **Alerts:** 18 rules, e.g. high failure rate or Kafka messages piling up.
-- **Logs and audit trail:** what happened and who did it. Every log line carries a *correlation id* (one per customer request) and the workflow id, so `make trace ID=<id>` prints the whole journey of a request through every service and agent (see `docs/logging.md`).
+- **Audit trail:** a write-only diary of business events (who approved, what was refunded) kept in the database.
+- **Logs:** the detailed, step-by-step record described below.
 - The trace id is passed along through web calls, MCP calls and even Kafka messages, which is why one trace connects everything.
+
+### 8.1 Logging: following one request from start to finish
+
+**The idea in one sentence:** every log line, in every service, carries the same *tracking number* for the customer's request, so you can pull out the whole story with one search.
+
+**Parcel analogy.** When you post a parcel it gets one tracking number, and every depot that touches it scans it. If the parcel goes missing you type the number and see each stop, with the time and what happened. Here the "parcel" is a customer request and the "depots" are the screen, the services, the AI agents, the model calls and the tools.
+
+**The ids printed on every line**
+
+| Id | Plain meaning | Example |
+|---|---|---|
+| `corr` | The tracking number of one customer request. Created by the screen when the user clicks Submit, then passed along everywhere (web calls, Kafka messages, MCP tools). | `trace-demo-1794160147` |
+| `wf` | The case number (workflow) | `WF-943C8A713B` |
+| `trace` | The id Jaeger uses to draw its timing chart | `299db904bf...` |
+| `agent` | Which AI step was running at that moment | `shipment` |
+
+One subtle point worth explaining: when the manager approves later, that click gets its own new tracking number. But the case remembers the *original* one, so everything the platform does after the approval (refund, replacement, message) is still filed under the original request. The case number ties the two together, and the search tool follows both.
+
+**What gets written down**
+
+- **Every web call into a service:** a line when it arrives (`->`) and a line when it leaves (`<-`) with the result code, time taken, who asked, what was asked and what was answered.
+- **Every call from one service to another** (`=>`), and every Kafka message sent or received.
+- **Every state change of a case**, for example `INVESTIGATING -> WAITING_FOR_APPROVAL`.
+- **For each AI agent:** what it was given (`AGENT >`) and what it handed back (`AGENT <`) with how long it took and how many tokens it used.
+- **For each model call:** what was asked and what came back (`LLM >` and `LLM <`).
+- **For each tool call:** the arguments and the result (`TOOL >` and `TOOL <`), and a clear `BLOCKED` line when a safety rule refuses it.
+- **For each policy search:** the question, which policy paragraphs were used, how confident the search was, and what was thrown away as suspicious.
+
+**How to use it (the part to demo)**
+
+```bash
+make trace ID=<tracking number or case number>
+```
+
+It collects the logs of all containers, keeps the lines of that case, sorts them by time and prints a single timeline. A real example (shortened) looks like this:
+
+```
+17:49:08  workflow-service  -> POST /api/workflows           (the customer's request arrives)
+17:49:09  agent-host        KAFKA IN workflow.started       (the AI brain wakes up)
+17:49:13  agent-host        AGENT > shipment received ...   (the shipment agent starts)
+17:49:14  agent-host        TOOL > get_shipment_status ...  (it asks for the parcel status)
+17:49:14  ecommerce-mcp     TOOL IN get_shipment_status     (the tool window receives it)
+17:49:14  shipment-service  <- GET /api/shipments/... 200    (the service answers)
+17:49:26  agent-host        AGENT < decision ok ...         (the AI proposes refund + replacement)
+17:49:28  approval-service  -> POST /api/approvals/.../decision (the manager approves)
+17:49:28  agent-host        RUN resume ...                  (the paused case wakes up)
+17:49:29  agent-host        TOOL > initiate_refund ...      (plain code issues the refund)
+17:49:32  agent-host        RUN finished status=COMPLETED
+```
+
+That one request produced about 340 log lines across 12 services; the tool lets you read it as one story instead of searching 14 separate logs.
+
+**Debugging recipe (what to say when asked "how would you debug a failure?")**
+
+1. Get the tracking number (the screen shows it after submitting) or the case number.
+2. Run `make trace ID=...`.
+3. Look for warnings, errors, `FAILED`, `BLOCKED` or a result code of 400 or above.
+4. Read the line just before it to see what was received, and the matching line after it to see what was returned.
+5. For slowness, compare the milliseconds on the `<-`, `LLM <` and `TOOL <` lines.
+
+**Is it safe?** Passwords, tokens, keys, e-mail addresses and phone numbers are replaced with `***` or `[email]` before anything is written, and the login headers are never logged. Long bodies are cut off. A scan of over 7,000 log lines found no secrets. Prompts and customer text are logged by default because they are what you need for debugging; there are switches to turn that off (`LOG_LLM_CONTENT=false`, `PLATFORM_LOGGING_BODIES=false`). On AWS the same lines go to CloudWatch, and `docs/logging.md` has the search query.
+
+**Where the code is**
+
+| Piece | Files |
+|---|---|
+| Java services: access log, masking, Kafka logs | `common/security/RequestLogFilter.java`, `common/util/LogSanitizer.java`, `common/events/EventLog.java`, plus log lines in `EventPublisher`, `OutboxRelay`, `PlatformRestClient`, `WorkflowService` |
+| Agent host: ids, masking, access log | `agent-host/app/observability/logctx.py`, `http_log.py` (and the agent/tool/model/RAG log lines in `graph/tracing.py`, `mcp/client.py`, `llm.py`, `rag/pipeline.py`, `kafka_consumer.py`, `runner.py`) |
+| MCP servers | `mcp_common/logsetup.py`, `mcp_common/observability.py`, `mcp_common/spring.py` |
+| Screen | `streamlit-ui/api_client.py` (creates the tracking number), `components/chat.py` (shows it) |
+| The search tool | `scripts/trace_request.py`, `make trace` |
+| Full guide | `docs/logging.md` |
 
 ---
 
@@ -326,6 +401,7 @@ Honest status: validated (`terraform validate`) and the database job tested loca
 | 7 | Auth, guardrails, observability, evaluation datasets, security checks | Locks, cameras, and exams |
 | 8 | AWS Terraform + Bedrock provider | Moving it to the cloud |
 | extra | Postman collection | A ready-made way to call every API |
+| extra | Detailed correlated logging + `make trace` | A tracking number on every log line, so any request can be followed end to end |
 
 Method used: build one phase at a time, write tests as you go, run the whole thing for real, fix what the real run reveals, commit, move on. Real bugs found this way include a poisoned policy that was blocked but not reported, an out-of-date container image missing the fault-injection code, and a refund rule that rejected a wrongly labelled approval.
 
@@ -355,6 +431,7 @@ Method used: build one phase at a time, write tests as you go, run the whole thi
 - **What stops hallucinations?** Read-only tools for facts, grounded citations for policies, a checker on every customer message, and plain code for all actions.
 - **What if the AI is down?** The platform retries, falls back to another model provider, and otherwise escalates to a human instead of guessing.
 - **What if a step fails mid-way?** The case ends as partially completed, a support task is opened, and the customer is told honestly.
+- **How do you debug one failed request?** Take its tracking number (shown on the screen) or case number and run `make trace ID=...`: one timeline of every service, agent, model call and tool call, with what each received and returned.
 - **How do you know it works?** 150+ unit tests per major area, 29 golden scenarios, 81 security checks, a 76-request API collection, and live runs with real model calls.
 
 ---
@@ -366,6 +443,7 @@ Method used: build one phase at a time, write tests as you go, run the whole thi
 - On AWS, Kafka and Redis traffic is not encrypted inside the private network, and OpenAI is still used for policy embeddings and the workflow advisor.
 - The AWS Terraform has not been run against a real account.
 - A few dashboard panels have no data until the corresponding traffic occurs.
+- Logs include prompts and customer text by default (masked for secrets, e-mails and phone numbers); switch that off if your data rules require it. `make trace` reads Docker logs, so on AWS you use the CloudWatch query in `docs/logging.md` instead.
 
 ---
 
