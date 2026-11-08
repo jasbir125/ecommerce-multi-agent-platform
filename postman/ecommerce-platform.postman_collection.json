@@ -1,0 +1,2819 @@
+{
+  "info": {
+    "_postman_id": "489c555c-1096-4773-9192-8725a5db3768",
+    "name": "Ecommerce Multi-Agent Order Recovery Platform",
+    "description": "Every REST endpoint of every service. 1) Run '00 Auth > Login as ...', 2) pick the active user, 3) run requests. 'internal' requests use X-Service-Token (trusted platform calls); end users use the Bearer JWT. Or run '99 End-to-end walk-through'.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token_alice}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const cv = pm.collectionVariables;",
+          "if (!cv.get('svcWorkflowId')) cv.set('svcWorkflowId', 'WF-PM' + Math.random().toString(16).slice(2, 10).toUpperCase());",
+          "// Tokens live 15 minutes: log everyone in again when they are missing or older than 10 minutes.",
+          "const age = Date.now() - Number(cv.get('tokensAt') || 0);",
+          "if (pm.info.requestName.indexOf('Login') !== 0 && (age > 600000 || !cv.get('token_alice'))) {",
+          "  cv.set('tokensAt', String(Date.now()));",
+          "  ['alice', 'bob', 'olivia', 'manny', 'admin'].forEach(u => pm.sendRequest({",
+          "    url: pm.variables.get('authUrl') + '/api/auth/token', method: 'POST', header: {'Content-Type': 'application/json'},",
+          "    body: {mode: 'raw', raw: JSON.stringify({username: u, password: pm.variables.get('demoPassword')})}",
+          "  }, (err, res) => { if (!err && res.code === 200) cv.set('token_' + u, res.json().accessToken); }));",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "orderUrl",
+      "value": "http://localhost:8081"
+    },
+    {
+      "key": "shipmentUrl",
+      "value": "http://localhost:8082"
+    },
+    {
+      "key": "paymentUrl",
+      "value": "http://localhost:8083"
+    },
+    {
+      "key": "inventoryUrl",
+      "value": "http://localhost:8084"
+    },
+    {
+      "key": "approvalUrl",
+      "value": "http://localhost:8085"
+    },
+    {
+      "key": "policyUrl",
+      "value": "http://localhost:8086"
+    },
+    {
+      "key": "auditUrl",
+      "value": "http://localhost:8087"
+    },
+    {
+      "key": "workflowUrl",
+      "value": "http://localhost:8088"
+    },
+    {
+      "key": "notificationUrl",
+      "value": "http://localhost:8089"
+    },
+    {
+      "key": "ecommerceMcpUrl",
+      "value": "http://localhost:8090"
+    },
+    {
+      "key": "policyMcpUrl",
+      "value": "http://localhost:8091"
+    },
+    {
+      "key": "agentUrl",
+      "value": "http://localhost:8092"
+    },
+    {
+      "key": "authUrl",
+      "value": "http://localhost:8093"
+    },
+    {
+      "key": "demoPassword",
+      "value": "demo-pass"
+    },
+    {
+      "key": "walkOrderId",
+      "value": "ORD-8802"
+    },
+    {
+      "key": "svcWorkflowId",
+      "value": ""
+    },
+    {
+      "key": "tokensAt",
+      "value": ""
+    },
+    {
+      "key": "rejectApprovalId",
+      "value": ""
+    },
+    {
+      "key": "serviceToken",
+      "value": "local-demo-token"
+    },
+    {
+      "key": "customerId",
+      "value": "CUST-1001"
+    },
+    {
+      "key": "orderId",
+      "value": "ORD-8801"
+    },
+    {
+      "key": "productId",
+      "value": "PRD-101"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "workflowId",
+      "value": ""
+    },
+    {
+      "key": "approvalId",
+      "value": ""
+    },
+    {
+      "key": "reservationId",
+      "value": ""
+    },
+    {
+      "key": "refundId",
+      "value": ""
+    },
+    {
+      "key": "policyId",
+      "value": ""
+    },
+    {
+      "key": "jobId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Auth (auth-service :8093)",
+      "description": "Run the five logins first (each stores token_<user>; every request below states which user it uses). Customers (alice=CUST-1001, bob=CUST-2002), operator (olivia), manager (manny), admin.",
+      "item": [
+        {
+          "name": "Login as alice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{authUrl}}/api/auth/token",
+              "host": [
+                "{{authUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "token"
+              ]
+            },
+            "description": "Issues an RS256 JWT for alice and stores it as {{token_alice}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"{{demoPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json().accessToken;",
+                  "pm.collectionVariables.set('token_alice', t);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as bob",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{authUrl}}/api/auth/token",
+              "host": [
+                "{{authUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "token"
+              ]
+            },
+            "description": "Issues an RS256 JWT for bob and stores it as {{token_bob}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"bob\",\n  \"password\": \"{{demoPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json().accessToken;",
+                  "pm.collectionVariables.set('token_bob', t);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as olivia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{authUrl}}/api/auth/token",
+              "host": [
+                "{{authUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "token"
+              ]
+            },
+            "description": "Issues an RS256 JWT for olivia and stores it as {{token_olivia}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"olivia\",\n  \"password\": \"{{demoPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json().accessToken;",
+                  "pm.collectionVariables.set('token_olivia', t);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as manny",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{authUrl}}/api/auth/token",
+              "host": [
+                "{{authUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "token"
+              ]
+            },
+            "description": "Issues an RS256 JWT for manny and stores it as {{token_manny}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"manny\",\n  \"password\": \"{{demoPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json().accessToken;",
+                  "pm.collectionVariables.set('token_manny', t);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{authUrl}}/api/auth/token",
+              "host": [
+                "{{authUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "token"
+              ]
+            },
+            "description": "Issues an RS256 JWT for admin and stores it as {{token_admin}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"{{demoPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json().accessToken;",
+                  "pm.collectionVariables.set('token_admin', t);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "JWKS (public keys)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{authUrl}}/.well-known/jwks.json",
+              "host": [
+                "{{authUrl}}"
+              ],
+              "path": [
+                ".well-known",
+                "jwks.json"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Login - wrong password (expect 401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{authUrl}}/api/auth/token",
+              "host": [
+                "{{authUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "token"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"wrong\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('rejected', () => pm.expect(pm.response.code).to.be.oneOf([401, 429]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 Inventory (:8084)",
+      "description": "",
+      "item": [
+        {
+          "name": "Search products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{inventoryUrl}}/api/catalog/products/search",
+              "host": [
+                "{{inventoryUrl}}"
+              ],
+              "path": [
+                "api",
+                "catalog",
+                "products",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "headphones",
+                  "disabled": false
+                },
+                {
+                  "key": "category",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "maxPrice",
+                  "value": "150",
+                  "disabled": true
+                },
+                {
+                  "key": "inStockOnly",
+                  "value": "true",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Get product stock",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{inventoryUrl}}/api/inventory/{{productId}}",
+              "host": [
+                "{{inventoryUrl}}"
+              ],
+              "path": [
+                "api",
+                "inventory",
+                "{{productId}}"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Reserve stock (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{inventoryUrl}}/api/inventory/reservations",
+              "host": [
+                "{{inventoryUrl}}"
+              ],
+              "path": [
+                "api",
+                "inventory",
+                "reservations"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflowId\": \"{{svcWorkflowId}}\",\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 1,\n  \"idempotencyKey\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                  "const j = pm.response.json();",
+                  "const v = j.reservationId;",
+                  "if (v !== undefined) pm.collectionVariables.set('reservationId', v);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get reservation (internal)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{inventoryUrl}}/api/inventory/reservations/{{reservationId}}",
+              "host": [
+                "{{inventoryUrl}}"
+              ],
+              "path": [
+                "api",
+                "inventory",
+                "reservations",
+                "{{reservationId}}"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Reserve stock again (to release)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{inventoryUrl}}/api/inventory/reservations",
+              "host": [
+                "{{inventoryUrl}}"
+              ],
+              "path": [
+                "api",
+                "inventory",
+                "reservations"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflowId\": \"{{svcWorkflowId}}-X\",\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 1,\n  \"idempotencyKey\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                  "const j = pm.response.json();",
+                  "const v = j.reservationId;",
+                  "if (v !== undefined) pm.collectionVariables.set('releaseReservationId', v);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Release reservation (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{inventoryUrl}}/api/inventory/reservations/{{releaseReservationId}}/release",
+              "host": [
+                "{{inventoryUrl}}"
+              ],
+              "path": [
+                "api",
+                "inventory",
+                "reservations",
+                "{{releaseReservationId}}",
+                "release"
+              ]
+            },
+            "description": "Idempotent.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Approval (:8085)",
+      "description": "",
+      "item": [
+        {
+          "name": "Create approval request (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{approvalUrl}}/api/approvals",
+              "host": [
+                "{{approvalUrl}}"
+              ],
+              "path": [
+                "api",
+                "approvals"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflowId\": \"{{svcWorkflowId}}\",\n  \"requestedAction\": \"REFUND\",\n  \"amount\": 129.99,\n  \"reason\": \"Shipment lost\",\n  \"riskLevel\": \"MEDIUM\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                  "const j = pm.response.json();",
+                  "const v = j.approvalId;",
+                  "if (v !== undefined) pm.collectionVariables.set('approvalId', v);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List approvals (status filter)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{approvalUrl}}/api/approvals",
+              "host": [
+                "{{approvalUrl}}"
+              ],
+              "path": [
+                "api",
+                "approvals"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "PENDING",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Use the manager token (manny).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_manny}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get approval",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{approvalUrl}}/api/approvals/{{approvalId}}",
+              "host": [
+                "{{approvalUrl}}"
+              ],
+              "path": [
+                "api",
+                "approvals",
+                "{{approvalId}}"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_manny}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Approve (manager)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{approvalUrl}}/api/approvals/{{approvalId}}/decision",
+              "host": [
+                "{{approvalUrl}}"
+              ],
+              "path": [
+                "api",
+                "approvals",
+                "{{approvalId}}",
+                "decision"
+              ]
+            },
+            "description": "Manager (manny) only.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVED\",\n  \"decidedBy\": \"manny\",\n  \"comment\": \"Evidence checked\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_manny}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create second approval (to reject)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{approvalUrl}}/api/approvals",
+              "host": [
+                "{{approvalUrl}}"
+              ],
+              "path": [
+                "api",
+                "approvals"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflowId\": \"{{svcWorkflowId}}-R\",\n  \"requestedAction\": \"REFUND\",\n  \"amount\": 10,\n  \"reason\": \"demo\",\n  \"riskLevel\": \"LOW\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                  "const j = pm.response.json();",
+                  "const v = j.approvalId;",
+                  "if (v !== undefined) pm.collectionVariables.set('rejectApprovalId', v);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject (manager)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{approvalUrl}}/api/approvals/{{rejectApprovalId}}/decision",
+              "host": [
+                "{{approvalUrl}}"
+              ],
+              "path": [
+                "api",
+                "approvals",
+                "{{rejectApprovalId}}",
+                "decision"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"REJECTED\",\n  \"decidedBy\": \"manny\",\n  \"comment\": \"Needs manual review\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_manny}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Payment (:8083)",
+      "description": "",
+      "item": [
+        {
+          "name": "Initiate refund (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{paymentUrl}}/api/payments/refunds",
+              "host": [
+                "{{paymentUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "refunds"
+              ]
+            },
+            "description": "Requires an APPROVED, unexpired approval for the same workflow and amount.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflowId\": \"{{svcWorkflowId}}\",\n  \"orderId\": \"{{orderId}}\",\n  \"amount\": 129.99,\n  \"approvalId\": \"{{approvalId}}\",\n  \"idempotencyKey\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                  "const j = pm.response.json();",
+                  "const v = j.refundId;",
+                  "if (v !== undefined) pm.collectionVariables.set('refundId', v);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get refund",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{paymentUrl}}/api/payments/refunds/{{refundId}}",
+              "host": [
+                "{{paymentUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "refunds",
+                "{{refundId}}"
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Order (:8081)",
+      "description": "",
+      "item": [
+        {
+          "name": "Get order",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orderUrl}}/api/orders/{{orderId}}",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                "{{orderId}}"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "List customer orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orderUrl}}/api/customers/{{customerId}}/orders",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerId}}",
+                "orders"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Get order owner (internal only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{orderUrl}}/api/orders/{{orderId}}/owner",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                "{{orderId}}",
+                "owner"
+              ]
+            },
+            "description": "Internal endpoint: rejects end-user tokens; send the service token.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Cancel order",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{orderUrl}}/api/orders/{{orderId}}/cancel",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                "{{orderId}}",
+                "cancel"
+              ]
+            },
+            "description": "Expected: shipped orders return 409."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('shipped orders cannot be cancelled (409)', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create replacement order (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{orderUrl}}/api/orders/replacement",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                "replacement"
+              ]
+            },
+            "description": "Needs a RESERVED reservation for the same workflow (run Inventory > Reserve first).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflowId\": \"{{svcWorkflowId}}\",\n  \"originalOrderId\": \"{{orderId}}\",\n  \"reservationId\": \"{{reservationId}}\",\n  \"idempotencyKey\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Shipment (:8082)",
+      "description": "",
+      "item": [
+        {
+          "name": "Get shipment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{shipmentUrl}}/api/shipments/{{orderId}}",
+              "host": [
+                "{{shipmentUrl}}"
+              ],
+              "path": [
+                "api",
+                "shipments",
+                "{{orderId}}"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Create carrier case (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{shipmentUrl}}/api/shipments/{{orderId}}/carrier-case",
+              "host": [
+                "{{shipmentUrl}}"
+              ],
+              "path": [
+                "api",
+                "shipments",
+                "{{orderId}}",
+                "carrier-case"
+              ]
+            },
+            "description": "Created once per shipment exception.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflowId\": \"{{svcWorkflowId}}\",\n  \"reason\": \"No scan for 5 days\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Policy (:8086)",
+      "description": "",
+      "item": [
+        {
+          "name": "Ingest policy (ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{policyUrl}}/api/policies/ingest",
+              "host": [
+                "{{policyUrl}}"
+              ],
+              "path": [
+                "api",
+                "policies",
+                "ingest"
+              ],
+              "query": [
+                {
+                  "key": "wait",
+                  "value": "true",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Admin only.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"policyKey\": \"demo-policy\",\n  \"version\": \"1\",\n  \"title\": \"Demo policy\",\n  \"content\": \"# Demo\\n\\n## Gift cards\\nGift cards are not refundable.\",\n  \"contentType\": \"text/markdown\",\n  \"policyType\": \"general\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                  "const j = pm.response.json();",
+                  "const v = j.documentId;",
+                  "if (v !== undefined) pm.collectionVariables.set('policyId', v);",
+                  "pm.collectionVariables.set('jobId', j.jobId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search policies (RAG)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{policyUrl}}/api/policies/search",
+              "host": [
+                "{{policyUrl}}"
+              ],
+              "path": [
+                "api",
+                "policies",
+                "search"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"refund for a delayed shipment\",\n  \"region\": null,\n  \"policyType\": \"refund\",\n  \"topK\": 5,\n  \"debug\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Validate refund eligibility",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{policyUrl}}/api/policies/validate",
+              "host": [
+                "{{policyUrl}}"
+              ],
+              "path": [
+                "api",
+                "policies",
+                "validate"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{orderId}}\",\n  \"orderStatus\": \"SHIPPED\",\n  \"orderAmount\": 129.99,\n  \"refundAmount\": 129.99,\n  \"delayDays\": 5,\n  \"shipmentStatus\": \"LOST\",\n  \"region\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List policies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{policyUrl}}/api/policies",
+              "host": [
+                "{{policyUrl}}"
+              ],
+              "path": [
+                "api",
+                "policies"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Get policy by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{policyUrl}}/api/policies/{{policyId}}",
+              "host": [
+                "{{policyUrl}}"
+              ],
+              "path": [
+                "api",
+                "policies",
+                "{{policyId}}"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Get policy by key + version",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{policyUrl}}/api/policies/refund-policy/2",
+              "host": [
+                "{{policyUrl}}"
+              ],
+              "path": [
+                "api",
+                "policies",
+                "refund-policy",
+                "2"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Get ingestion job (ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{policyUrl}}/api/policies/jobs/{{jobId}}",
+              "host": [
+                "{{policyUrl}}"
+              ],
+              "path": [
+                "api",
+                "policies",
+                "jobs",
+                "{{jobId}}"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Archive policy (ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{policyUrl}}/api/policies/{{policyId}}/archive",
+              "host": [
+                "{{policyUrl}}"
+              ],
+              "path": [
+                "api",
+                "policies",
+                "{{policyId}}",
+                "archive"
+              ]
+            },
+            "description": "Archive the policy created by Ingest.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Audit (:8087)",
+      "description": "",
+      "item": [
+        {
+          "name": "Append audit event (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{auditUrl}}/api/audit/events",
+              "host": [
+                "{{auditUrl}}"
+              ],
+              "path": [
+                "api",
+                "audit",
+                "events"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflowId\": \"{{svcWorkflowId}}\",\n  \"agentName\": \"postman\",\n  \"eventType\": \"MANUAL_NOTE\",\n  \"payload\": {\n    \"note\": \"hello\"\n  },\n  \"actor\": \"postman\",\n  \"correlationId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Audit trail for workflow",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{auditUrl}}/api/audit/workflows/{{svcWorkflowId}}",
+              "host": [
+                "{{auditUrl}}"
+              ],
+              "path": [
+                "api",
+                "audit",
+                "workflows",
+                "{{svcWorkflowId}}"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_olivia}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Workflow (:8088)",
+      "description": "",
+      "item": [
+        {
+          "name": "Create workflow (alice)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{workflowUrl}}/api/workflows",
+              "host": [
+                "{{workflowUrl}}"
+              ],
+              "path": [
+                "api",
+                "workflows"
+              ]
+            },
+            "description": "Use alice's token. Customer id comes from the token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{orderId}}\",\n  \"message\": \"My order {{orderId}} has not arrived and the tracking is stuck.\",\n  \"requestId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                  "const j = pm.response.json();",
+                  "const v = j.workflowId;",
+                  "if (v !== undefined) pm.collectionVariables.set('workflowId', v);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List workflows",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{workflowUrl}}/api/workflows",
+              "host": [
+                "{{workflowUrl}}"
+              ],
+              "path": [
+                "api",
+                "workflows"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Operator or manager token.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_olivia}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get workflow",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{workflowUrl}}/api/workflows/{{workflowId}}",
+              "host": [
+                "{{workflowUrl}}"
+              ],
+              "path": [
+                "api",
+                "workflows",
+                "{{workflowId}}"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Workflow trace (operator)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{workflowUrl}}/api/workflows/{{workflowId}}/trace",
+              "host": [
+                "{{workflowUrl}}"
+              ],
+              "path": [
+                "api",
+                "workflows",
+                "{{workflowId}}",
+                "trace"
+              ]
+            },
+            "description": "Audit events and Kafka events; operator token.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_olivia}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Recent Kafka events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{workflowUrl}}/api/workflows/events/recent",
+              "host": [
+                "{{workflowUrl}}"
+              ],
+              "path": [
+                "api",
+                "workflows",
+                "events",
+                "recent"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "disabled": false
+                },
+                {
+                  "key": "topic",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_olivia}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resume workflow (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
+              {
+                "key": "X-Roles",
+                "value": "OPERATOR"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{workflowUrl}}/api/workflows/{{workflowId}}/resume",
+              "host": [
+                "{{workflowUrl}}"
+              ],
+              "path": [
+                "api",
+                "workflows",
+                "{{workflowId}}",
+                "resume"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idempotencyKey\": \"{{$guid}}\",\n  \"targetStatus\": \"ESCALATED\",\n  \"statePatch\": {},\n  \"reason\": \"postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "AI classify intent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{workflowUrl}}/api/ai/classify",
+              "host": [
+                "{{workflowUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "classify"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"My package is lost, I want my money back\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "AI recommend resolution",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{workflowUrl}}/api/ai/recommend",
+              "host": [
+                "{{workflowUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "recommend"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflowId\": \"{{workflowId}}\",\n  \"orderId\": \"{{orderId}}\",\n  \"orderAmount\": 129.99,\n  \"refundEligible\": true,\n  \"verifiedFacts\": {\n    \"shipmentStatus\": \"LOST\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Notification (:8089)",
+      "description": "",
+      "item": [
+        {
+          "name": "Notify customer (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "X-Customer-Id",
+                "value": "{{customerId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{notificationUrl}}/api/notifications/customer",
+              "host": [
+                "{{notificationUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "customer"
+              ]
+            },
+            "description": "Result templates are verified against the owning service.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflowId\": \"{{svcWorkflowId}}\",\n  \"customerId\": \"{{customerId}}\",\n  \"channel\": \"EMAIL\",\n  \"template\": \"REFUND_INITIATED\",\n  \"params\": {\n    \"refundId\": \"{{refundId}}\",\n    \"orderId\": \"{{orderId}}\",\n    \"amount\": \"129.99\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Notify internal team (internal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "{{serviceToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{notificationUrl}}/api/notifications/internal",
+              "host": [
+                "{{notificationUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "internal"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflowId\": \"{{svcWorkflowId}}\",\n  \"channel\": \"SLACK\",\n  \"message\": \"Manual follow-up needed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Agent host (:8092)",
+      "description": "",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{agentUrl}}/health",
+              "host": [
+                "{{agentUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Start run (usually not needed: creating a workflow starts the agent via Kafka)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{agentUrl}}/api/agent/runs",
+              "host": [
+                "{{agentUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "runs"
+              ],
+              "query": [
+                {
+                  "key": "stream",
+                  "value": "false",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Runs the supervisor graph; pauses at the approval. stream=true returns SSE.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"orderId\": \"{{walkOrderId}}\",\n  \"message\": \"My order {{walkOrderId}} has not arrived.\",\n  \"requestId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                  "const j = pm.response.json();",
+                  "const v = j.workflowId;",
+                  "if (v !== undefined) pm.collectionVariables.set('workflowId', v);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get run",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{agentUrl}}/api/agent/runs/{{workflowId}}",
+              "host": [
+                "{{agentUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "runs",
+                "{{workflowId}}"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Run trace",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{agentUrl}}/api/agent/runs/{{workflowId}}/trace",
+              "host": [
+                "{{agentUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "runs",
+                "{{workflowId}}",
+                "trace"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Resume run (after approval)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{agentUrl}}/api/agent/runs/{{workflowId}}/resume",
+              "host": [
+                "{{agentUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "runs",
+                "{{workflowId}}",
+                "resume"
+              ],
+              "query": [
+                {
+                  "key": "stream",
+                  "value": "false",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Admin metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{agentUrl}}/api/agent/admin/metrics",
+              "host": [
+                "{{agentUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "admin",
+                "metrics"
+              ],
+              "query": [
+                {
+                  "key": "hours",
+                  "value": "24",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Operator token.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_olivia}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Ask policy (RAG)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{agentUrl}}/api/agent/rag/ask",
+              "host": [
+                "{{agentUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "rag",
+                "ask"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"How many days do I have to return an item?\",\n  \"region\": \"EU\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Prometheus metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{agentUrl}}/metrics",
+              "host": [
+                "{{agentUrl}}"
+              ],
+              "path": [
+                "metrics"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 MCP servers (:8090 ecommerce, :8091 policy)",
+      "description": "The MCP endpoint itself (/mcp) speaks the MCP protocol (JSON-RPC over streamable HTTP) and needs an MCP client; only the plain HTTP routes are listed here.",
+      "item": [
+        {
+          "name": "Ecommerce MCP health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ecommerceMcpUrl}}/health",
+              "host": [
+                "{{ecommerceMcpUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Policy MCP health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{policyMcpUrl}}/health",
+              "host": [
+                "{{policyMcpUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Ecommerce MCP metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ecommerceMcpUrl}}/metrics",
+              "host": [
+                "{{ecommerceMcpUrl}}"
+              ],
+              "path": [
+                "metrics"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Policy MCP metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{policyMcpUrl}}/metrics",
+              "host": [
+                "{{policyMcpUrl}}"
+              ],
+              "path": [
+                "metrics"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 Actuator health (all Spring services)",
+      "description": "",
+      "item": [
+        {
+          "name": "auth health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{authUrl}}/actuator/health",
+              "host": [
+                "{{authUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "order health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orderUrl}}/actuator/health",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "shipment health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{shipmentUrl}}/actuator/health",
+              "host": [
+                "{{shipmentUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "payment health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{paymentUrl}}/actuator/health",
+              "host": [
+                "{{paymentUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "inventory health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{inventoryUrl}}/actuator/health",
+              "host": [
+                "{{inventoryUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "approval health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{approvalUrl}}/actuator/health",
+              "host": [
+                "{{approvalUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "policy health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{policyUrl}}/actuator/health",
+              "host": [
+                "{{policyUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "audit health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{auditUrl}}/actuator/health",
+              "host": [
+                "{{auditUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "workflow health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{workflowUrl}}/actuator/health",
+              "host": [
+                "{{workflowUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "notification health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{notificationUrl}}/actuator/health",
+              "host": [
+                "{{notificationUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "99 End-to-end walk-through",
+      "description": "Log in, start a run as alice, approve as manny, then poll the run (the agent host resumes by itself through Kafka). Each order can be refunded once: run postman/new_order.sh and set the `orderId` variable to the id it prints.",
+      "item": [
+        {
+          "name": "Login as alice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{authUrl}}/api/auth/token",
+              "host": [
+                "{{authUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "token"
+              ]
+            },
+            "description": "Issues an RS256 JWT for alice and stores it as {{token_alice}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"{{demoPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json().accessToken;",
+                  "pm.collectionVariables.set('token_alice', t);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as manny",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{authUrl}}/api/auth/token",
+              "host": [
+                "{{authUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "token"
+              ]
+            },
+            "description": "Issues an RS256 JWT for manny and stores it as {{token_manny}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"manny\",\n  \"password\": \"{{demoPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json().accessToken;",
+                  "pm.collectionVariables.set('token_manny', t);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Start run (agent host)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{agentUrl}}/api/agent/runs",
+              "host": [
+                "{{agentUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "runs"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"CUST-1001\",\n  \"orderId\": \"{{walkOrderId}}\",\n  \"message\": \"My order {{walkOrderId}} has not arrived.\",\n  \"requestId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                  "const j = pm.response.json();",
+                  "const v = j.workflowId;",
+                  "if (v !== undefined) pm.collectionVariables.set('workflowId', v);",
+                  "pm.test('paused for approval', () => pm.expect(j.waitingForApproval).to.eql(true));",
+                  "if (j.approvalId) pm.collectionVariables.set('approvalId', j.approvalId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Approve",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{approvalUrl}}/api/approvals/{{approvalId}}/decision",
+              "host": [
+                "{{approvalUrl}}"
+              ],
+              "path": [
+                "api",
+                "approvals",
+                "{{approvalId}}",
+                "decision"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVED\",\n  \"decidedBy\": \"manny\",\n  \"comment\": \"ok\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_manny}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "5. Get run (repeat until status is COMPLETED)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{agentUrl}}/api/agent/runs/{{workflowId}}",
+              "host": [
+                "{{agentUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "runs",
+                "{{workflowId}}"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "pm.test('status ' + j.status, () => pm.expect(pm.response.code).to.eql(200));",
+                  "console.log(j.status, j.customerResponse);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6. Audit trail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{auditUrl}}/api/audit/workflows/{{workflowId}}",
+              "host": [
+                "{{auditUrl}}"
+              ],
+              "path": [
+                "api",
+                "audit",
+                "workflows",
+                "{{workflowId}}"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_olivia}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
