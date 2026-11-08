@@ -1,0 +1,15 @@
+# cp terraform.tfvars.example terraform.tfvars   (terraform.tfvars is git-ignored)
+region      = "ap-south-1"
+environment = "prod"
+
+# Restrict the load balancer to your network and use HTTPS for anything beyond a demo.
+allowed_ingress_cidrs = ["203.0.113.0/24"]
+# certificate_arn     = "arn:aws:acm:ap-south-1:123456789012:certificate/..."
+
+bedrock_model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+
+# Needed only for OpenAI embeddings (policy-service) and the workflow advisor.
+# Prefer: export TF_VAR_openai_api_key=...   (never commit the key)
+# policy_embedding_provider = "openai"
+
+# expose_apis = true        # publish the REST APIs too (for Postman / CI)

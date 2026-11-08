@@ -17,3 +17,12 @@ first_prompt.txt
 master_prompt.txt
 how_to_use_prompt
 recommended_model
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+*.auto.tfvars
+crash.log
+tfplan

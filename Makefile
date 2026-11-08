@@ -1,5 +1,5 @@
 # Convenience targets. Run `make help` for the list.
-.PHONY: eval-golden eval-component eval-security dashboards eval-rag eval-rag-holdout help env infra up down logs ps topics psql build-java run-agent test-agent run-mcp test-mcp run-ui test-ui ui-smoke clean
+.PHONY: tf-validate eval-golden eval-component eval-security dashboards eval-rag eval-rag-holdout help env infra up down logs ps topics psql build-java run-agent test-agent run-mcp test-mcp run-ui test-ui ui-smoke clean
 
 help:        ## Show this help
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -80,3 +80,6 @@ eval-security: ## 81 live security checks
 
 dashboards: ## regenerate and validate Grafana dashboards
 	$(PY) infra/grafana/build_dashboards.py && $(PY) infra/grafana/validate_dashboards.py
+
+tf-validate: ## Terraform format check + validate (no AWS credentials needed)
+	cd infra/aws/terraform && terraform fmt -check -recursive && terraform init -backend=false -input=false >/dev/null && terraform validate

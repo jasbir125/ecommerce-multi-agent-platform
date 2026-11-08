@@ -27,22 +27,41 @@ class BudgetExceeded(Exception):
 
 
 def _provider_default(settings: Settings, provider: str) -> str:
+    if provider == "bedrock":
+        return settings.bedrock_model_id
     return settings.openai_model if provider == "openai" else settings.anthropic_model
 
 
 def model_name(settings: Settings, agent: str, provider: str | None = None) -> str:
     provider = provider or settings.model_provider
     override = getattr(settings, f"model_{agent}", None) or getattr(settings, f"model_{agent}_agent", None)
-    # A Claude model name is meaningless to OpenAI and vice versa: fall back to the provider default.
-    if override and ((provider == "openai") != override.lower().startswith("claude")):
+    # A model name only means something to its own provider: otherwise use the provider default.
+    if override and _belongs_to(provider, override):
         return override
     return _provider_default(settings, provider)
+
+
+def _belongs_to(provider: str, name: str) -> bool:
+    n = name.lower()
+    if provider == "bedrock":                       # Bedrock ids look like "anthropic.claude-...", "eu.anthropic...", or an inference-profile ARN
+        return n.startswith("arn:") or "." in n.split(":")[0]
+    if provider == "openai":
+        return not n.startswith("claude") and "." not in n.split(":")[0]
+    return n.startswith("claude")
 
 
 def build_model(settings: Settings, provider: str, name: str) -> BaseChatModel:
     if provider == "openai":
         from langchain_openai import ChatOpenAI
         return ChatOpenAI(model=name, temperature=0, api_key=settings.openai_api_key, max_retries=2, timeout=60)
+    if provider == "bedrock":
+        # Credentials come from the task/instance role; the guardrail (if configured) screens every call.
+        from langchain_aws import ChatBedrockConverse
+        kwargs: dict[str, Any] = {}
+        if settings.bedrock_guardrail_id:
+            kwargs["guardrail_config"] = {"guardrailIdentifier": settings.bedrock_guardrail_id,
+                                          "guardrailVersion": settings.bedrock_guardrail_version, "trace": "enabled"}
+        return ChatBedrockConverse(model=name, region_name=settings.aws_region, temperature=0, max_tokens=4096, **kwargs)
     from langchain_anthropic import ChatAnthropic
     return ChatAnthropic(model=name, temperature=0, api_key=settings.anthropic_api_key, max_retries=2, timeout=60)
 
@@ -80,7 +99,7 @@ class UsageTracker(AsyncCallbackHandler):
         except (AttributeError, IndexError):
             pass
         i, o = usage.get("input_tokens", 0), usage.get("output_tokens", 0)
-        price = next((p for k, p in PRICES.items() if model.startswith(k)), (0, 0))
+        price = next((p for k, p in PRICES.items() if k in model), (0, 0))
         row = self.by_agent[agent]
         row["input"] += i
         row["output"] += o
@@ -105,9 +124,11 @@ class ModelFactory:
     def __init__(self, settings: Settings):
         self.s = settings
         self.provider = settings.model_provider
-        self.fallback_provider = "openai" if self.provider == "anthropic" else "anthropic"
+        self.fallback_provider = "openai" if self.provider in ("anthropic", "bedrock") else "anthropic"
 
     def _has_key(self, provider: str) -> bool:
+        if provider == "bedrock":
+            return True                            # role-based credentials
         return bool(self.s.openai_api_key if provider == "openai" else self.s.anthropic_api_key)
 
     def get(self, agent: str) -> BaseChatModel:

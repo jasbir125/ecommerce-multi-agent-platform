@@ -8,11 +8,16 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # --- models -----------------------------------------------------------------
-    model_provider: str = "anthropic"               # anthropic | openai
+    model_provider: str = "anthropic"               # anthropic | openai | bedrock
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-5-5"
     openai_model: str = "gpt-4o-mini"
+    # Amazon Bedrock (credentials come from the IAM role of the task; nothing secret is configured here)
+    aws_region: str = "ap-south-1"
+    bedrock_model_id: str = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+    bedrock_guardrail_id: str | None = None
+    bedrock_guardrail_version: str = "DRAFT"
     # Optional per-agent overrides (see the recommended_model file); blank = provider default.
     model_supervisor: str | None = None
     model_order_agent: str | None = None

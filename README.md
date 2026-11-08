@@ -4,7 +4,7 @@ An enterprise-grade Multi-Agent Ecommerce Order Recovery Platform. Demo workflow
 
 > **Core rule:** the model can suggest an action, but only authorized application code and domain services can execute it.
 
-**Status: Phase 7 complete.** Infrastructure, the nine Spring Boot services, the two FastMCP servers, the LangGraph agent host, a production-grade policy RAG and the Streamlit operations UI are implemented and tested end to end. JWT auth, guardrails, observability (Jaeger, Prometheus, Grafana) and golden-dataset evaluation (Phase 7) are in place; Bedrock deployment (Phase 8) remains.
+**Status: Phase 8 complete (all phases done).** Infrastructure, the nine Spring Boot services, the two FastMCP servers, the LangGraph agent host, a production-grade policy RAG and the Streamlit operations UI are implemented and tested end to end. JWT auth, guardrails, observability (Jaeger, Prometheus, Grafana) and golden-dataset evaluation (Phase 7) are in place; AWS deployment (Terraform for ECS/Fargate, Bedrock model + guardrail) is in `infra/aws`.
 
 ## Layout
 
@@ -132,6 +132,7 @@ The full 12-step script is in `docs/demo-script.md`.
 5. **Phase 5** — Production RAG (pgvector, hybrid retrieval, reranking, caching, grounding, citations) ✅
 6. **Phase 6** — Streamlit UI ✅
 7. **Phase 7** — Guardrails, security, observability, evaluation ✅ (auth-service :8093, Jaeger :16686, Grafana dashboards; see `docs/guardrails.md`, `docs/observability.md`; `make eval-golden`, `make eval-security`)
+8. **Phase 8** — AWS: Bedrock provider, Terraform (ECS/Fargate, RDS, ElastiCache, MSK, Secrets Manager, guardrail) ✅ validated, not applied to a live account; see `infra/aws/deployment.md`
 7. Guardrails, security, observability, evaluation datasets
 8. AWS Bedrock deployment docs and configuration
 
@@ -169,4 +170,4 @@ The full 12-step script is in `docs/demo-script.md`.
 - Tested headlessly (48 tests, Streamlit `AppTest`) and against the live stack (`live_smoke.py`); screenshots in `docs/screenshots/`.
 
 ## Model routing
-`MODEL_PROVIDER` selects anthropic/openai (bedrock is Phase 8). Per-agent models are set via `MODEL_*` variables (all Sonnet to start; see `recommended_model`).
+`MODEL_PROVIDER` selects anthropic/openai/bedrock. Per-agent models are set via `MODEL_*` variables (all Sonnet to start; see `recommended_model`).
