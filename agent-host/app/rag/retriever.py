@@ -6,6 +6,7 @@ import logging
 import time
 from typing import Any, Awaitable, Callable
 
+from app.guardrails.tool_guardrails import TOOL_FAILURES
 from app.rag.models import Chunk
 
 log = logging.getLogger("rag.retriever")
@@ -48,7 +49,7 @@ class PolicyRetriever:
         args = {"query": query, "top_k": self.k, **{k: v for k, v in filters.items() if v}}
         try:
             res = await asyncio.wait_for(self.search(args), timeout=self.timeout)
-        except Exception as e:  # noqa: BLE001
+        except TOOL_FAILURES as e:
             self.breaker.failure()
             raise RetrievalUnavailable(f"policy search failed: {e}") from e
         self.breaker.success()

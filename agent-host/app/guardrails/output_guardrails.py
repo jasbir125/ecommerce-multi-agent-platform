@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from decimal import Decimal
 
+from app.models.money import is_within_budget, to_money
 from app.models.resolution import ExecutionResult, ResolutionDecision
 
 ALLOWED_ACTIONS = {"REFUND_AND_REPLACE", "REFUND_ONLY", "REPLACE_ONLY", "ESCALATE", "NO_ACTION"}
@@ -11,12 +13,19 @@ ALLOWED_ACTIONS = {"REFUND_AND_REPLACE", "REFUND_ONLY", "REPLACE_ONLY", "ESCALAT
 
 @dataclass
 class DecisionContext:
-    order_amount: float | None
+    order_amount: Decimal | None
     refund_eligible: bool
     policy_cited: bool
-    candidate_prices: dict[str, float]      # product_id -> price, from the catalog tool
-    original_price: float | None
-    max_refund_amount: float = 500.0
+    candidate_prices: dict[str, Decimal]    # product_id -> price, from the catalog tool
+    original_price: Decimal | None
+    max_refund_amount: Decimal = Decimal("500.00")
+
+    def __post_init__(self) -> None:
+        """Amounts may be given as numbers; they are compared as Decimal cents."""
+        self.order_amount = None if self.order_amount is None else to_money(self.order_amount)
+        self.original_price = None if self.original_price is None else to_money(self.original_price)
+        self.candidate_prices = {pid: to_money(price) for pid, price in self.candidate_prices.items()}
+        self.max_refund_amount = to_money(self.max_refund_amount)
 
 
 def decision_violations(d: ResolutionDecision, ctx: DecisionContext) -> list[str]:
@@ -30,7 +39,7 @@ def decision_violations(d: ResolutionDecision, ctx: DecisionContext) -> list[str
             v.append("POLICY_FORBIDS_REFUND")
         if d.refund_amount is None or d.refund_amount <= 0:
             v.append("REFUND_AMOUNT_MISSING")
-        elif ctx.order_amount is not None and d.refund_amount > ctx.order_amount + 1e-9:
+        elif ctx.order_amount is not None and not is_within_budget(d.refund_amount, ctx.order_amount):
             v.append("REFUND_EXCEEDS_ORDER_AMOUNT")
         elif d.refund_amount > ctx.max_refund_amount:
             v.append("REFUND_EXCEEDS_LIMIT")
@@ -42,7 +51,7 @@ def decision_violations(d: ResolutionDecision, ctx: DecisionContext) -> list[str
         pid = d.replacement_product_id
         if not pid or pid not in ctx.candidate_prices:
             v.append("REPLACEMENT_NOT_IN_CATALOG_RESULTS")
-        elif ctx.original_price is not None and ctx.candidate_prices[pid] > ctx.original_price + 1e-9:
+        elif ctx.original_price is not None and not is_within_budget(ctx.candidate_prices[pid], ctx.original_price):
             v.append("REPLACEMENT_COSTS_MORE")
     if d.action in ("REFUND_ONLY", "ESCALATE", "NO_ACTION") and d.replacement_product_id:
         v.append("UNEXPECTED_REPLACEMENT")

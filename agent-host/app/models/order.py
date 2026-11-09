@@ -1,12 +1,14 @@
 from pydantic import BaseModel
 
+from app.models.money import Money
+
 
 class OrderSnapshot(BaseModel):
     """Order facts exactly as returned by the order tools (never written by a model)."""
     order_id: str
     status: str
     payment_status: str
-    total_amount: float
+    total_amount: Money
     currency: str = "USD"
     product_id: str | None = None
     product_name: str | None = None

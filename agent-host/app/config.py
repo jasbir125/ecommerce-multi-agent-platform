@@ -1,4 +1,5 @@
 """Runtime settings, read from environment variables (see the root .env.example)."""
+from decimal import Decimal
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -58,8 +59,8 @@ class Settings(BaseSettings):
     run_token_budget: int = 60000                   # per workflow run, all agents
     max_tool_calls_per_agent: int = 6
     min_policy_confidence: float = 0.5
-    max_refund_amount: float = 500.0
-    high_value_threshold: float = 100.0             # orders above this are MEDIUM risk
+    max_refund_amount: Decimal = Decimal("500.00")
+    high_value_threshold: Decimal = Decimal("100.00")            # orders above this are MEDIUM risk
     runs_per_minute_per_customer: int = 10
 
 

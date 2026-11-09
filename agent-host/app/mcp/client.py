@@ -14,7 +14,7 @@ from langchain_core.tools import BaseTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from app.config import Settings
-from app.guardrails.tool_guardrails import ToolCallError
+from app.guardrails.tool_guardrails import TOOL_FAILURES, ToolCallError
 from app.mcp.tool_loader import parse_tool_result
 from app.observability import metrics as m
 from app.observability import logctx
@@ -60,7 +60,7 @@ class McpGateway:
                 m.TOOL_CALLS.labels("code", name, "ok").inc()
                 m.TOOL_LATENCY.labels(name).observe(time.perf_counter() - started)
                 return out
-            except Exception as e:  # noqa: BLE001
+            except TOOL_FAILURES as e:
                 # Only a rate limit is retried here: it is transient and the call never reached a service.
                 if "RATE_LIMITED" in str(e) and attempt < self.RATE_LIMIT_ATTEMPTS:
                     m.RETRIES.labels("rate_limit").inc()

@@ -12,6 +12,7 @@ from app.graph.tracing import traced
 from app.guardrails.input_guardrails import check_request
 from app.guardrails.tool_guardrails import ToolCallError
 from app.observability import metrics as m
+from app.models.money import money_as_number
 from app.models.resolution import ExecutionResult, StepResult
 
 log = logging.getLogger("agent.nodes")
@@ -89,7 +90,7 @@ async def decision_node(state, config) -> dict:
     update["usage"] = deps.run(state).usage.summary()
     d = update["resolution"]
     await deps.workflows.audit(state.workflow_id, "decision-agent", "AGENT_DECISION",
-                               {"action": d.action, "refund": d.refund_amount, "replacement": d.replacement_product_id,
+                               {"action": d.action, "refund": money_as_number(d.refund_amount) if d.refund_amount is not None else None, "replacement": d.replacement_product_id,
                                 "risk": d.risk_level}, state.customer_id)
     return update
 
@@ -102,7 +103,7 @@ async def approval_request(state, config) -> dict:
     gw = deps.run(state).gateway
     try:
         apr = await gw.call("create_approval_request", {
-            "workflow_id": state.workflow_id, "requested_action": "REFUND", "amount": d.refund_amount,
+            "workflow_id": state.workflow_id, "requested_action": "REFUND", "amount": money_as_number(d.refund_amount),
             "reason": d.reason[:400], "risk_level": d.risk_level})
     except ToolCallError as e:
         return {"status": "ESCALATED", "errors": [f"APPROVAL_REQUEST_FAILED: {str(e)[:160]}"]}
@@ -182,7 +183,7 @@ async def execute(state, config) -> dict:
     final, reason = "COMPLETED", "recovery executed"
     try:
         refund = await gw.call("initiate_refund", {
-            "workflow_id": wf, "order_id": state.order_id, "amount": d.refund_amount,
+            "workflow_id": wf, "order_id": state.order_id, "amount": money_as_number(d.refund_amount),
             "approval_id": state.approval_id, "idempotency_key": f"rf-{wf}"})
         ex.refund_id, ex.refund_status = refund.get("refundId"), refund.get("status")
         done("refund", ex.refund_status in ("INITIATED", "COMPLETED"), f"{ex.refund_id} {ex.refund_status}")
@@ -265,7 +266,8 @@ async def escalate(state, config) -> dict:
 async def response_node(state, config) -> dict:
     deps = deps_of(config)
     gw = deps.run(state).gateway
-    text, notes = await response_agent.run(state, deps, config)
+    reply = await response_agent.run(state, deps, config)
+    text, notes = reply.get("customer_response"), list(reply.get("errors", []))
     ex, wf = state.execution, state.workflow_id
     sent: list[str] = []
 

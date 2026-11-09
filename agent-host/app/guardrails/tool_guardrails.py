@@ -8,7 +8,9 @@ from typing import Any
 
 import time
 
-from langchain_core.tools import BaseTool, StructuredTool
+import httpx
+from langchain_core.tools import BaseTool, StructuredTool, ToolException
+from mcp.shared.exceptions import McpError
 
 from app.observability import logctx, metrics as m
 from app.observability.tracing import span
@@ -24,6 +26,9 @@ AGENT_TOOLS: dict[str, set[str]] = {
 }
 WRITE_TOOLS = {"create_approval_request", "initiate_refund", "reserve_inventory", "release_inventory",
                "create_replacement_order", "create_carrier_case", "notify_customer", "create_support_task"}
+# What a tool call may fail with (service refusal, transport problem, bad payload). Anything else is a bug and propagates.
+TOOL_FAILURES: tuple[type[BaseException], ...] = (
+    ToolException, McpError, httpx.HTTPError, ExceptionGroup, ValueError, RuntimeError, OSError, TimeoutError)
 PRODUCT_ID = re.compile(r"^PRD-[A-Z0-9]{2,20}$")
 
 
@@ -79,7 +84,7 @@ def guard_tools(tools: dict[str, BaseTool], agent: str, policy: ToolPolicy, log:
                     log.append({"agent": agent, "tool": name, "args": kwargs, "ok": True, "result": result})
                     m.TOOL_CALLS.labels(agent, name, "ok").inc()
                     return _as_text(result)
-                except Exception as e:  # noqa: BLE001 - agent should see the failure, not crash
+                except TOOL_FAILURES as e:       # the agent sees the failure as text; it must not crash the run
                     tlog.warning("TOOL < %s FAILED %.0fms error=%s", name, (time.perf_counter() - started) * 1000, logctx.clean(str(e), 400))
                     log.append({"agent": agent, "tool": name, "args": kwargs, "ok": False, "error": str(e)})
                     m.TOOL_CALLS.labels(agent, name, "error").inc()

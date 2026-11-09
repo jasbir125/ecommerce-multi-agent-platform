@@ -25,6 +25,7 @@ APPROVAL_WAIT = Histogram("agent_approval_wait_seconds", "Time from approval req
 
 NODE_DURATION = Histogram("agent_node_duration_seconds", "Duration of a graph step", ["node"], buckets=LATENCY)
 NODE_RESULTS = Counter("agent_node_results", "Graph step outcomes", ["node", "status"])
+AGENT_RUNS = Counter("agent_runs", "Agent executions by outcome (ok, degraded)", ["agent", "outcome"])
 REACT_ITERATIONS = Histogram("agent_react_iterations", "Model turns a specialist agent needed", ["agent"], buckets=(1, 2, 3, 4, 5, 6, 8, 10, 14))
 
 LLM_CALLS = Counter("agent_llm_calls", "Model calls", ["agent", "model"])

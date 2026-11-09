@@ -2,13 +2,15 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.models.money import Money
+
 Action = Literal["REFUND_AND_REPLACE", "REFUND_ONLY", "REPLACE_ONLY", "ESCALATE", "NO_ACTION"]
 
 
 class ResolutionDecision(BaseModel):
     """A proposal. Nothing happens until approval and deterministic execution."""
     action: Action
-    refund_amount: float | None = None
+    refund_amount: Money | None = None
     replacement_product_id: str | None = None
     approval_required: bool = True
     risk_level: Literal["LOW", "MEDIUM", "HIGH"] = "MEDIUM"

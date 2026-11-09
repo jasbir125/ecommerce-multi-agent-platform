@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from app.guardrails.input_guardrails import mask_pii
-from app.llm import BudgetExceeded
+from app.llm import MODEL_ERRORS, BudgetExceeded
 from app.observability import logctx, metrics as m
 from app.observability.tracing import span
 from app.rag.context_builder import apply_region_precedence, build_context
@@ -169,7 +169,7 @@ class RagPipeline:
             return await self._timed(name, diag, asyncio.wait_for(fn(), timeout=self.s.llm_timeout))
         except BudgetExceeded:
             raise
-        except Exception as e:  # noqa: BLE001
+        except MODEL_ERRORS as e:
             log.warning("rag stage %s failed: %s", name, e)
             diag["stages"].append({"stage": name, "error": str(e)[:150]})
             return default
