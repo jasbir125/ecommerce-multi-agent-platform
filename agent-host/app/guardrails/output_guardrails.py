@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from app.models.money import is_within_budget, to_money
+from app.models.money import is_below, is_within_budget, to_money
 from app.models.resolution import ExecutionResult, ResolutionDecision
 
 ALLOWED_ACTIONS = {"REFUND_AND_REPLACE", "REFUND_ONLY", "REPLACE_ONLY", "ESCALATE", "NO_ACTION"}
@@ -51,7 +51,7 @@ def decision_violations(d: ResolutionDecision, ctx: DecisionContext) -> list[str
         pid = d.replacement_product_id
         if not pid or pid not in ctx.candidate_prices:
             v.append("REPLACEMENT_NOT_IN_CATALOG_RESULTS")
-        elif ctx.original_price is not None and not is_within_budget(ctx.candidate_prices[pid], ctx.original_price):
+        elif ctx.original_price is not None and not is_below(ctx.candidate_prices[pid], ctx.original_price):
             v.append("REPLACEMENT_COSTS_MORE")
     if d.action in ("REFUND_ONLY", "ESCALATE", "NO_ACTION") and d.replacement_product_id:
         v.append("UNEXPECTED_REPLACEMENT")

@@ -69,6 +69,7 @@ that are `None` are not written, so a failed agent never overwrites existing sta
 11. **Temperature** of the response agent is 0.3 (was 0).
 12. New optional field `currency` on `ProductCandidate`; money fields on `OrderSnapshot`, `ProductCandidate`, `ProductRecommendation` and `ResolutionDecision` are `Decimal` in Python (JSON output unchanged).
 13. Metric added: `agent_runs_total`.
+14. **"Cheaper" means strictly cheaper**: a replacement must cost less than the original unit price (was: not more). The output guardrail `REPLACEMENT_COSTS_MORE` enforces the same; `refund-policy-v2` now says "cheaper replacement".
 
 ## Not changed (and why)
 

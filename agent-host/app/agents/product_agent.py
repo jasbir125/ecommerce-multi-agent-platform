@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from app.agents.base import (MODEL_ERRORS, TOOL_ERRORS, AgentInputError, AgentRun, AgentUpdate, describe, run_react,
                              tool_results)
-from app.models.money import CENT, DEFAULT_CURRENCY, is_within_budget, money_as_number, same_currency, to_money
+from app.models.money import CENT, DEFAULT_CURRENCY, is_below, money_as_number, same_currency, to_money
 from app.models.order import OrderSnapshot
 from app.models.product import ProductCandidate, ProductRecommendation
 
@@ -192,7 +192,7 @@ def parse_candidate(raw: Any) -> ProductCandidate | None:
 
 def is_valid_candidate(candidate: ProductCandidate, request: ProductRequest) -> bool:
     return (is_in_stock(candidate) and is_different_product(candidate, request)
-            and same_currency(candidate.currency, request.currency) and costs_no_more_than_original(candidate, request))
+            and same_currency(candidate.currency, request.currency) and is_cheaper_than_original(candidate, request))
 
 
 def is_in_stock(candidate: ProductCandidate) -> bool:
@@ -203,8 +203,8 @@ def is_different_product(candidate: ProductCandidate, request: ProductRequest) -
     return candidate.product_id != request.original_product_id
 
 
-def costs_no_more_than_original(candidate: ProductCandidate, request: ProductRequest) -> bool:
-    return candidate.price > 0 and is_within_budget(candidate.price, request.unit_budget)
+def is_cheaper_than_original(candidate: ProductCandidate, request: ProductRequest) -> bool:
+    return candidate.price > 0 and is_below(candidate.price, request.unit_budget)
 
 
 # ----------------------------------------------------------------------------------------- select_decision()

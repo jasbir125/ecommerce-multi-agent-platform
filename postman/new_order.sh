@@ -8,6 +8,6 @@ INSERT INTO customer_order (order_id, customer_id, status, payment_status, total
 VALUES ('$ID','CUST-1001','SHIPPED','CAPTURED',129.99,'PRD-100','AeroSound Pro Wireless Headphones');
 INSERT INTO shipment (order_id, customer_id, carrier, tracking_no, status, expected_delivery, delay_days, last_event)
 VALUES ('$ID','CUST-1001','BlueDart','BD-$ID','LOST', CURRENT_DATE - 5, 5, 'No scan for 5 days; last seen at regional hub');
-UPDATE product SET available_qty = GREATEST(available_qty, 10) WHERE product_id = 'PRD-101';
+UPDATE product SET available_qty = GREATEST(available_qty, 10) WHERE product_id IN ('PRD-101','PRD-103');
 SQL
 echo "$ID"

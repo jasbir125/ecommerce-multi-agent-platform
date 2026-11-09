@@ -9,7 +9,7 @@ effective_from: 2026-01-01
 # Refund Policy
 
 ## Delayed shipments
-Orders delayed by three (3) or more days beyond the promised delivery date are eligible for a full refund of the order amount. The customer may instead choose a replacement of equal or lower price.
+Orders delayed by three (3) or more days beyond the promised delivery date are eligible for a full refund of the order amount. The customer may instead choose a cheaper replacement (a lower price than the original item).
 
 ## Lost shipments
 A shipment is treated as lost when the carrier shows no scan for five (5) days. Shipments confirmed lost by the carrier are eligible for a full refund. A carrier exception case must be opened once per shipment.

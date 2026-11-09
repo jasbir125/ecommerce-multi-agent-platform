@@ -39,6 +39,11 @@ def is_within_budget(amount: Decimal, budget: Decimal, tolerance: Decimal = PRIC
     return amount <= budget + tolerance
 
 
+def is_below(amount: Decimal, limit: Decimal) -> bool:
+    """Strictly less than: a "cheaper" replacement must cost less than the original, not the same."""
+    return amount < limit
+
+
 def same_currency(first: str | None, second: str | None) -> bool:
     """Unknown (missing) currencies are treated as the default currency, as the order tools do."""
     return (first or DEFAULT_CURRENCY).upper() == (second or DEFAULT_CURRENCY).upper()

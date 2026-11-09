@@ -100,7 +100,7 @@ INSERT INTO customer_order (order_id, customer_id, status, payment_status, total
  ('ORD-8804','CUST-1001','SHIPPED','CAPTURED',129.99,'PRD-100','AeroSound Pro Wireless Headphones');
 
 INSERT INTO shipment (order_id, customer_id, carrier, tracking_no, status, expected_delivery, delay_days, last_event) VALUES
- ('ORD-7842','CUST-1001','BlueDart','BD-778421','LOST', CURRENT_DATE - 5, 5,'No scan for 5 days; last seen at regional hub'),
+ ('ORD-7842','CUST-1001','BlueDart','BD-778421','DELAYED', CURRENT_DATE - 5, 5,'Delayed at regional hub; new estimate unknown'),
  ('ORD-9001','CUST-2002','BlueDart','BD-900112','IN_TRANSIT', CURRENT_DATE + 2, 0,'Out for delivery soon'),
  ('ORD-8801','CUST-1001','BlueDart','BD-880101','LOST', CURRENT_DATE - 5, 5,'No scan for 5 days; last seen at regional hub'),
  ('ORD-8802','CUST-1001','BlueDart','BD-880201','LOST', CURRENT_DATE - 5, 5,'No scan for 5 days; last seen at regional hub'),

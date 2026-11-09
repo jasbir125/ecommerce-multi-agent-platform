@@ -127,16 +127,16 @@ async def test_a_replacement_in_another_currency_is_never_compared_by_amount(mon
     assert [c.product_id for c in out["product_recommendation"].candidates] == ["PRD-103"]
 
 
-async def test_price_equal_to_the_original_is_allowed_and_one_cent_more_is_not(monkeypatch):
-    rows = [product("PRD-EQ", 129.99), product("PRD-OVER", 130.00)]
+async def test_a_cheaper_replacement_must_cost_strictly_less_than_the_original(monkeypatch):
+    rows = [product("PRD-EQ", 129.99), product("PRD-OVER", 130.00), product("PRD-LESS", 129.98)]
     out = await run(monkeypatch, gateway(*rows), calls=[search_call(*rows)])
-    assert [c.product_id for c in out["product_recommendation"].candidates] == ["PRD-EQ"]
+    assert [c.product_id for c in out["product_recommendation"].candidates] == ["PRD-LESS"]
 
 
 async def test_budget_is_the_unit_price_rounded_half_up_with_decimal(monkeypatch):
     state = make_state(order=order(amount="100.00", quantity=3))
-    out = await run(monkeypatch, gateway(product("PRD-103", 33.33), product("PRD-104", 33.34)), state=state,
-                    calls=[search_call(product("PRD-103", 33.33), product("PRD-104", 33.34))])
+    out = await run(monkeypatch, gateway(product("PRD-103", 33.32), product("PRD-104", 33.33)), state=state,
+                    calls=[search_call(product("PRD-103", 33.32), product("PRD-104", 33.33))])
     assert out["product_recommendation"].max_price == Decimal("33.33")
     assert [c.product_id for c in out["product_recommendation"].candidates] == ["PRD-103"]
 
