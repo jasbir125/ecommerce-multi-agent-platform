@@ -82,8 +82,12 @@ def _header(wf: dict, run: dict | None, state: str) -> None:
     if run.get("waitingForApproval"):
         st.warning(f"⏳ Waiting for a manager to approve approval `{run.get('approvalId')}`. Nothing has been executed.")
     ex = run.get("execution") or {}
-    c2.metric("Refund", ex.get("refund_status") or "-", help=ex.get("refund_id") or None)
-    c3.metric("Replacement", "created" if ex.get("replacement_order_id") else "-", help=ex.get("replacement_order_id") or None)
+    c2.metric("Refund", ex.get("refund_status") or "-")
+    if ex.get("refund_id"):
+        c2.caption(f"`{ex['refund_id']}`")
+    c3.metric("Replacement", "created" if ex.get("replacement_order_id") else "-")
+    if ex.get("replacement_order_id"):
+        c3.caption(f"order `{ex['replacement_order_id']}`")
     risk = (run.get("risk") or {}).get("level")
     c4.metric("Risk", risk or "-")
     if run.get("customerResponse"):
