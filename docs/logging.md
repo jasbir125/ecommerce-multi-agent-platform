@@ -110,3 +110,10 @@ fields @timestamp, @log, @message
 4. Read the line just before it: the `AGENT >` input, the `TOOL >` arguments or the `->` request body show what was received; the matching `<`
    line shows what was returned.
 5. For a timing problem compare the `ms` values of the `<-`, `LLM <` and `TOOL <` lines.
+
+## Request log page (UI)
+The UI has a **📜 Request log** page (also reachable from the button under the tracking id on *Customer request*). Enter or open a workflow id and it shows every service's log lines for that request in time order, with each request and response as the services logged them, refreshing every 3 seconds until the case finishes. It filters by service, level and text, can show only requests and responses, and downloads the result as a `.log` file.
+
+How it works: the UI container reads the other containers' logs through the Docker API (`streamlit-ui/log_source.py`), keeps the lines that carry the workflow id or any correlation id used on that case, drops the UI's own polling, and sorts by time. This is the same idea as `make trace`.
+
+Setup note: `docker-compose.yml` mounts `/var/run/docker.sock` read-only into the `streamlit` container. The Docker API behind that socket is powerful, so this is for a local demo only. Without the mount the page says the logs are not reachable and points to `make trace ID=<workflow id>`. Bodies are masked and shortened by the services' own loggers; the page cannot show more than was logged.

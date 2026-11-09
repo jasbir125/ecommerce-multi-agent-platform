@@ -35,13 +35,13 @@ def page_options(at):
 def test_customer_sees_request_policy_and_explorer_but_not_staff_pages():
     at = app("customer")
     assert not at.exception
-    assert page_options(at) == ["Customer request", "Policy assistant", "Workflow explorer"]
+    assert page_options(at) == ["Customer request", "Policy assistant", "Workflow explorer", "Request log"]
 
 
 def test_staff_also_get_approvals_and_admin():
     for persona in ("operator", "manager"):
         at = app(persona)
-        assert len(page_options(at)) == 5 and "Admin" in page_options(at)
+        assert len(page_options(at)) == 6 and "Admin" in page_options(at)
 
 
 def test_request_form_submits_a_live_run_and_shows_the_workflow():
@@ -195,3 +195,46 @@ def test_an_unknown_persona_in_the_link_is_ignored():
     at.query_params["as"] = "superuser"
     at.run()
     assert at.session_state["persona"] == "customer"
+
+
+class FakeLogs:
+    def __init__(self, reason=None, rows=None):
+        self.reason, self.rows, self.calls = reason, rows if rows is not None else [], []
+
+    def unavailable_reason(self): return self.reason
+    def journey(self, wf, since): self.calls.append(wf); return self.rows, {wf, "corr-1"}
+
+
+def _row(ts, service, level, text):
+    from log_source import Row
+    return Row(f"2026-11-09T06:20:{ts}Z", service, level, text, text)
+
+
+ROWS = [_row("03.100", "workflow-service", "INFO", "http.access: -> POST /api/workflows caller=customer=CUST-1001 req={...}"),
+        _row("03.900", "agent-host", "INFO", "[supervisor] agent.graph: AGENT > supervisor received input={}"),
+        _row("04.500", "ecommerce-mcp-server", "INFO", "TOOL IN get_order_status args={'order_id': 'ORD-7842'}"),
+        _row("09.000", "workflow-service", "ERROR", "http.access: <- POST /api/workflows 500 12ms resp={...}")]
+
+
+def test_request_log_page_shows_every_line_filters_and_the_download():
+    logs = FakeLogs(rows=ROWS)
+    at = app("customer", page="Request log", logs=None, _logs_override=logs, workflow_id="WF-TEST000001")
+    assert not at.exception, at.exception
+    assert logs.calls and {"Log lines", "Services involved", "Ids followed"} <= labels(at)
+    assert next(m for m in at.metric if m.label == "Log lines").value == "4"
+    assert "Showing 4 of 4 lines" in texts(at)
+    at.checkbox(key="log_exchange").check().run()                   # requests and responses only: the AGENT/TOOL/HTTP lines all qualify
+    assert "Showing 4 of 4 lines" in texts(at)
+    at.text_input(key="log_search").set_value("tool in").run()
+    assert "Showing 1 of 4 lines" in texts(at)
+
+
+def test_request_log_page_explains_when_the_logs_cannot_be_read():
+    at = app("customer", page="Request log", _logs_override=FakeLogs(reason="ConnectError: no socket"))
+    assert not at.exception
+    assert "not reachable" in texts(at) and "make trace" in texts(at)
+
+
+def test_request_log_page_asks_for_a_workflow_when_none_is_open():
+    at = app("customer", page="Request log", _logs_override=FakeLogs())
+    assert "Place an order" in texts(at)

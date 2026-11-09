@@ -16,6 +16,17 @@ def get_api():
     return st.session_state.get("_api_override") or _default_api()
 
 
+@st.cache_resource
+def _default_logs():
+    from log_source import LogSource
+    return LogSource()
+
+
+def get_logs():
+    """Reads the other containers' logs. Tests put a fake in st.session_state['_logs_override']."""
+    return st.session_state.get("_logs_override") or _default_logs()
+
+
 def identity() -> Identity:
     return st.session_state["identity"]
 

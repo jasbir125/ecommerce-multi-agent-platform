@@ -38,6 +38,9 @@ def render(api, who: Identity) -> None:
         st.caption(f"Tracking id for support / debugging: correlation `{track['correlationId']}`"
                    + (f" · workflow `{track['workflowId']}`" if track.get("workflowId") else "")
                    + ". Search the logs of any service for either id (see docs/logging.md).")
+        if track.get("workflowId") and st.button("📜 View the full request log", key="to_log"):
+            st.session_state["go_to"] = "Request log"
+            st.rerun()
 
     wf = selected_workflow()
     if wf:

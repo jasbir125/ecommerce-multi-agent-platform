@@ -346,6 +346,11 @@ services:
       STREAMLIT_API_BASE_URL: http://workflow-service:8088
       STREAMLIT_APPROVAL_API_BASE_URL: http://approval-service:8085
       AGENT_HOST_URL: http://agent-host:8092
+      COMPOSE_PROJECT_NAME: ecommerce-multi-agent-platform
+    # The "Request log" page reads the other containers' logs through the Docker socket. Read-only mount, but the Docker API
+    # behind it is powerful: local demo only (see docs/logging.md).
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on: [agent-host, workflow-service, approval-service]
 
 networks:

@@ -4,9 +4,9 @@ import logging
 import streamlit as st
 
 from api_client import Identity
-from components import admin_panel, approval_panel, chat, policy_assistant, workflow_view
+from components import admin_panel, approval_panel, chat, policy_assistant, request_log, workflow_view
 from data import icon
-from state import get_api, open_workflow, selected_workflow
+from state import get_api, get_logs, open_workflow, selected_workflow
 
 if not logging.getLogger("ui").handlers:                  # one handler for all the UI's loggers, set up once per process
     _h = logging.StreamHandler()
@@ -72,7 +72,8 @@ def main() -> None:
     who = sidebar()
     pages = {"Customer request": ("📝", lambda: chat.render(api, who)),
              "Policy assistant": ("📚", lambda: policy_assistant.render(api, who)),
-             "Workflow explorer": ("🔍", lambda: explorer(api, who))}
+             "Workflow explorer": ("🔍", lambda: explorer(api, who)),
+             "Request log": ("📜", lambda: request_log.render(api, who, get_logs()))}
     if who.is_staff:
         pages["Approvals"] = ("✅", lambda: approval_panel.render(api, who))
         pages["Admin"] = ("🛠", lambda: admin_panel.render(api, who))
