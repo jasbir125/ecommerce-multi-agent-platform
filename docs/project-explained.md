@@ -29,7 +29,7 @@ A guide for explaining this project to anyone: what it is, how the pieces fit, w
 | The manager signs off big or risky orders | The **approval** step |
 | The cashier actually takes or returns money | Ordinary **services** (payment, inventory, order) do the real actions |
 | CCTV and the receipt log | **Audit trail**, traces, metrics |
-| Health inspector tests | **Evaluation datasets** and security checks |
+| Health inspector tests | **Evaluation datasets** (the golden scenarios) and the unit tests |
 
 ---
 
@@ -61,6 +61,23 @@ Read it like this:
 - **Top right:** the AI brain (the *agent host*). It never touches the databases directly. It can only use a fixed menu of safe actions exposed by the two *MCP servers*.
 - **Bottom:** PostgreSQL stores the data. Kafka is a message board the services use to tell each other "something happened".
 - **Who is calling:** every call carries a shared secret (the *service token*) plus the customer and roles it acts for; each service checks the secret and enforces ownership and roles itself.
+
+### The final architecture at a glance
+
+| Layer | What exists | Notes |
+|---|---|---|
+| Screen | 1 Streamlit app (:8501) | Persona switcher (customer / operator / manager), 5 pages |
+| Business services | 9 Spring Boot services + 1 shared `common` module | order 8081, shipment 8082, payment 8083, inventory 8084, approval 8085, policy 8086, audit 8087, workflow 8088, notification 8089 |
+| AI brain | 1 agent host (:8092): FastAPI + LangGraph | supervisor + 7 specialist steps, 4 layers of guardrails, RAG answer checks |
+| Tool windows | 2 FastMCP servers (:8090 ecommerce, :8091 policy) | read tools, guarded write tools, resources, prompts |
+| Data and messaging | PostgreSQL + pgvector, Redis, Kafka (17 topics) | outbox/inbox so no event is lost or processed twice |
+| Observability | OpenTelemetry collector, Jaeger, Prometheus, Grafana, correlated logs | `make trace` follows one request |
+| Cloud | Terraform for AWS ECS Fargate (13 services), Bedrock model + guardrail | validated, not applied to a live account |
+| Proof | 14 golden scenarios (`make eval`), RAG quality (`make eval-rag`), unit tests, 66-request Postman collection | |
+
+That is 22 containers in `docker-compose.yml` (9 Spring services, 2 MCP servers, agent host, screen, plus Postgres, Redis, Kafka, Kafka UI, a topic-setup job, the collector, Jaeger, Prometheus and Grafana).
+
+**What is deliberately *not* here.** The project was trimmed to what the requirements ask for. There is no user login or JWT service (identity is the service token plus customer/role headers), no request-hardening filter or startup security check, no fault-injection switch, no second RAG implementation in the agent host (policy-service owns search and rerank), and no test-the-tests tooling or dashboard generator. Each of these was built earlier and removed again; the git history shows them if you are asked.
 
 ---
 
@@ -152,8 +169,8 @@ Each is a small program with one job. They share a toolbox called `common`.
 | **payment-service** (8083) | Issues refunds. Strict: needs an *approved* approval for the same case and amount, refunds only once per order, never more than the order total. | `PaymentController`, `RefundService` |
 | **inventory-service** (8084) | Product catalogue and stock. Reserving stock can never oversell, and repeating a request is harmless. | `InventoryController`, `InventoryService` |
 | **approval-service** (8085) | The approval inbox: create a request, list, approve or reject. | `ApprovalController`, `ApprovalService` |
-| **policy-service** (8086) | The rule book plus a smart search engine (see section 6). Checks refund eligibility. | `PolicyController`, `ValidationService`, plus `ingest/`, `retrieval/`, `embedding/`, `cache/`, `text/` folders; `policies/*.md` are the rule documents |
-| **audit-service** (8087) | Write-only diary of everything that happened. Cannot be edited (a database trigger forbids it). Hides personal data like emails. | `AuditController`, `AuditService`, `PiiMasker` |
+| **policy-service** (8086) | The rule book plus a smart search engine (see section 6). Checks refund eligibility. | `PolicyController`, `ValidationService`, `PolicySeeder`; `ingest/` (`IngestionPipeline`, `IngestionJobService`, `SemanticChunker`, `TextExtractor`, `PolicyStore`), `retrieval/` (`RetrievalService`, `CandidateSearcher`, `RankFusion`, `FeatureReranker`, `QueryProcessor`, `ContextCompressor`, `QueryLogger`), `embedding/EmbeddingService`, `cache/SafeCache`, `text/Tokens`; `policies/*.md` are the rule documents |
+| **audit-service** (8087) | Write-only diary of everything that happened. Cannot be edited (a database trigger forbids it). Hides personal data like emails. | `AuditController`, `AuditService` (includes the masking) |
 | **workflow-service** (8088) | The case manager: creates cases, tracks status, publishes events, offers the trace. Also has a small AI "advisor". | `WorkflowController`, `WorkflowService`, `WorkflowStatus`, `InputGuardrails`, `ApprovalDecisionListener`, `ai/` folder |
 | **notification-service** (8089) | Sends customer messages from fixed templates, after checking the facts (refund id really exists) with the owning service. | `NotificationController`, `NotificationService`, `NotificationListener` |
 
@@ -203,15 +220,15 @@ Why this matters: the AI can *never* reach a database or a payment API directly.
 | `mcp/client.py`, `tool_loader.py` | Connects to the MCP servers and calls their tools |
 | `llm.py` | Picks the AI model per agent (OpenAI, Claude or Amazon Bedrock), falls back to another provider if one fails, counts tokens and cost, enforces a token budget |
 | `guardrails/` | Safety checks (see section 7) |
-| `rag/` | The policy question-answering pipeline (see section 6) |
+| `rag/` | The agent-host half of the policy answer (see section 6): `retriever.py` (calls policy-service), `context_builder.py` (budget, dedupe, injection scan), `generator.py` (asks the model for a cited answer), `grounding_validator.py` (checks every sentence against the cited text), `pipeline.py` (ties it together), `models.py` |
 | `observability/` | Metrics, tracing, and the logging pieces: `logctx.py` (tracking ids on every line, masking), `http_log.py` (logs every web call) |
 | `services/workflow_client.py` | Writes status and audit entries back to workflow-service |
 | `evaluation/evaluator.py` | Scores runs for the admin screen |
-| `tests/` | 131 automatic tests |
+| `tests/` | 131 automatic tests (guardrails, graph flow including partial failure and rejection, RAG, logging, Bedrock provider) |
 
 ### 5.5 Infrastructure: `infra/` and `docker-compose.yml`
 
-`docker-compose.yml` starts the whole system on a laptop with one command: PostgreSQL (with vector search), Redis (fast cache), Kafka (message board), the 10 Java services, the 2 MCP servers, the agent host, the screen, plus monitoring tools.
+`docker-compose.yml` starts the whole system on a laptop with one command: PostgreSQL (with vector search), Redis (fast cache), Kafka (message board), the 9 Java services, the 2 MCP servers, the agent host, the screen, plus monitoring tools.
 
 | File | What it does |
 |---|---|
@@ -249,6 +266,8 @@ Why this matters: the AI can *never* reach a database or a payment API directly.
 7. **Validate:** a checker verifies that every sentence is actually supported by the cited text. If not, it falls back to quoting the policy directly, or says **"I could not verify this"**.
 
 Result: answers always come with sources and a confidence score, or an honest "don't know".
+
+**How well does it work (measured, `make eval-rag`)?** On the 32-question golden set it answered 31 and abstained on all 10 unanswerable ones; on 13 unseen questions it answered 9 of 10 and abstained on all 3 unanswerable ones. It never invented a number, and a typical answer takes about a second and costs about a hundredth of a cent. **The trade-off to mention:** search happens once, in one place (policy-service), with no model-based query rewrite or relevance judge. So a heavily paraphrased question (one on each test set) can end in "could not verify" and get escalated rather than answered, and the grounding check guarantees the answer is *supported by the cited text*, not that the cited text is the perfect passage.
 
 ---
 
@@ -366,7 +385,7 @@ Terraform (infrastructure-as-code) can build the whole thing on Amazon Web Servi
 
 - A private network; only a load balancer faces the internet.
 - **RDS** (database), **ElastiCache** (Redis), **MSK** (Kafka).
-- **ECS Fargate** runs the 14 containers without managing servers.
+- **ECS Fargate** runs the 13 containers (9 services, 2 MCP servers, agent host, screen) without managing servers.
 - **Secrets Manager** holds passwords and keys; nothing secret is in code.
 - **Amazon Bedrock** can be the AI model provider (`MODEL_PROVIDER=bedrock`), with a **Bedrock Guardrail**. Only the agent host has permission to call Bedrock.
 - Helper scripts: `push-images.sh` (build and upload containers), `run-db-init.sh` (create tables).
@@ -381,7 +400,7 @@ Honest status: validated (`terraform validate`) and the database job tested loca
 | Phase | What was built | Plain meaning |
 |---|---|---|
 | 1 | Folders, `docker-compose`, database, Kafka topics, docs skeleton | The empty building and utilities |
-| 2 | Nine Spring Boot services | The business departments |
+| 2 | Nine Spring Boot services (plus a shared `common` module) | The business departments |
 | 3 | Two MCP servers | The safe "tool windows" for the AI |
 | 4 | LangGraph agent host with supervisor and specialists | The AI team and its flowchart |
 | 5 | Production-grade policy RAG | A reliable rule-book search that cannot make things up |
@@ -428,6 +447,7 @@ Method used: build one phase at a time, write tests as you go, run the whole thi
 ## 13. Honest limitations (say these yourself before someone asks)
 
 - The shipments, payments, carrier and notifications are **simulated** (mock domain tables); this is a reference architecture, not connected to a real payment gateway or carrier.
+- RAG is deliberately simple: one retrieval, one model call, strict checking. It prefers "could not verify" over a guess, so it occasionally abstains on an unusual paraphrase.
 - There is **no user login**: identity travels in headers set by the front end (the spec shows an OAuth2/JWT gateway in front; that is not built). Anyone holding the service token can claim any customer or role, so a real deployment needs an authenticating gateway.
 - On AWS, Kafka and Redis traffic is not encrypted inside the private network, and OpenAI is still used for policy embeddings and the workflow advisor.
 - The AWS Terraform has not been run against a real account.

@@ -71,7 +71,7 @@ Local state is the default so `terraform init` works anywhere. For a team, add a
 - **No user authentication.** Identity is carried in headers set by the front end (see `docs/security.md`). Put an authenticating gateway (ALB + Cognito/OIDC) in front before any real use.
 - **Observability**: logs and Container Insights are provisioned. The OpenTelemetry collector, Prometheus, Grafana and Jaeger of the local stack are not deployed; services still expose `/metrics` and emit W3C trace headers. Use AWS Distro for OpenTelemetry with X-Ray/CloudWatch, or Amazon Managed Prometheus/Grafana (dashboards in `infra/grafana/dashboards` import as they are).
 - Single NAT gateway and one task per service by default (cheap, not highly available): raise `desired_count`, set `single_nat_gateway = false` and `db_multi_az = true` for production.
-- Cost drivers: NAT gateway, MSK brokers, RDS, 14 Fargate tasks. Destroy test environments.
+- Cost drivers: NAT gateway, MSK brokers, RDS, 13 Fargate tasks. Destroy test environments.
 
 ## Option B: EKS
 
